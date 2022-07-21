@@ -1,0 +1,74 @@
+[package]
+name = "crystals"
+version = "0.1.0"
+authors = ["Kamyar Mohajerani <kammoh@gmail.com>"]
+edition = "2021"
+license = "Apache-2.0"
+readme = "README.md"
+categories = ["cryptography", "no-std"]
+
+[dependencies]
+array-init = "2.0.1"
+crunchy = { version = "0.2.2", default-features = false, features = [
+    "limit_64",
+] }
+cty = "0.2.2"
+digest = "0.10.3"
+generic-array = "0.14.5"
+itertools = { version = "0.10.3", default-features = false }
+rand = { version = "0.8.5", default-features = false }
+
+[dev-dependencies]
+criterion = {version = "0.3.5", features = ["html_reports"]}
+hex-literal = "0.3.4"
+rand = "0.8.5"
+crystals-cref = { path = "./cref" }
+
+
+# [[bench]]
+# name = "kem_keypair_bench"
+# harness = false
+
+# [[bench]]
+# name = "keccak_bench"
+# harness = false
+
+
+
+[[bench]]
+name = "kyber_poly"
+harness = false
+
+[[bench]]
+name = "dilithium_poly"
+harness = false
+
+[[bench]]
+name = "kyber_polyvec"
+harness = false
+
+[[bench]]
+name = "dilithium_polyvec"
+harness = false
+
+[features]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[workspace]
+members = ["cref"]
+
+[profile.dev]
+
+
+[profile.release]
+panic = "abort"
+lto = true
+strip = true
+codegen-units = 1
+debug-assertions = false
+debug = false
+opt-level = 3
+overflow-checks = false  # Disable integer overflow checks.
+incremental = true       # Speed up build times by caching intermediate results.

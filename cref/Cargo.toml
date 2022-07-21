@@ -1,0 +1,17 @@
+[package]
+name = "crystals-cref"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+cty = "0.2.2"
+
+[dev-dependencies]
+
+
+[build-dependencies]
+bindgen = "0.60.1"
+cargo-emit = "0.2.1"
+cc = "1.0.73"
+glob = "0.3.0"
