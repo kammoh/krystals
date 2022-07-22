@@ -113,7 +113,6 @@ fn compile_lib(alg: &dyn Algorithm, level: u8) {
     }
 
     bindings_builder
-        // .header(ref_dir.join("ntt.h").to_string_lossy())
         .size_t_is_usize(true)
         .allowlist_function("pqcrystals_.*")
         .allowlist_var("[A-Z0-9_]+") // constants
@@ -143,13 +142,13 @@ fn compile_lib(alg: &dyn Algorithm, level: u8) {
         .include(ref_dir)
         .out_dir(&out_path)
         .opt_level(3)
-        .flag("-O3")
+        // .flag("-O3")
         .force_frame_pointer(false)
-        .flag("-fomit-frame-pointer")
+        // .flag("-fomit-frame-pointer")
         .flag_if_supported("-march=native")
-        .flag("-mtune=native")
+        .flag_if_supported("-mtune=native")
         .debug(false)
-        .flag("-g0")
+        // .flag("-g0")
         .define(
             alg.sec_param_name(),
             Some(alg.sec_param_value(level).to_string().as_str()),
