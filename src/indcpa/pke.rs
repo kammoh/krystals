@@ -1,17 +1,12 @@
-use super::prf::*;
-use crate::field::Field;
 use crate::params::*;
+use crate::poly::kyber::KYBER_POLYBYTES;
 use crate::poly::kyber::KyberPoly;
-use crate::poly::Poly;
 use crate::poly::Polynomial;
-use crate::polymat::*;
 use crate::polyvec::*;
 use crate::unsafe_utils::*;
 use crate::CPASecretKey;
 use crate::CipherText;
 use crate::PublicKey;
-use generic_array::GenericArray;
-// use generic_array::ArrayLength;
 use rand::RngCore;
 // use sha3::digest::generic_array::GenericArray;
 // use sha3::digest::FixedOutput;
@@ -54,8 +49,8 @@ where
     // pkpv.add_assign(&e);
     // pkpv.reduce();
 
-    let pkpv = PolyVec::<KyberPoly, K>::default();
-    let skpv = PolyVec::<KyberPoly, K>::default();
+    let pkpv = PolyVec::<KyberPoly, { KyberPoly::N }, K>::default();
+    let skpv = PolyVec::<KyberPoly, { KyberPoly::N }, K>::default();
     let publicseed = &[0u8; KYBER_SYMBYTES];
 
     let mut pk = PublicKey {
@@ -97,11 +92,13 @@ impl SecLevel for L1 {
 //     data: GenericArray<u8, Prod<N, U3> >
 // }
 
-fn pack_ciphertext<P: Polynomial, const K: usize, const CT_BYTES: usize>(
-    b: &PolyVec<P, K>,
+fn pack_ciphertext<P, const N: usize, const K: usize, const CT_BYTES: usize>(
+    b: &PolyVec<P, N, K>,
     v: &P,
     ct: &mut [u8; CT_BYTES],
-) {
+) where
+    P: Polynomial<N>,
+{
     // const KYBER_POLYVECCOMPRESSEDBYTES: usize =
     // K match {
     //     2 => 2
@@ -124,7 +121,7 @@ pub fn encrypt<const K: usize, const CT_BYTES: usize>(
 ) {
     // let mut prf = Shake256::default();
 
-    let pkpv = PolyVec::<KyberPoly, K>::from_bytes(&pk.bytes);
+    let pkpv = PolyVec::<KyberPoly, { KyberPoly::N }, K>::from_bytes(&pk.bytes);
 
     // let k = Poly::from_message(msg);
 

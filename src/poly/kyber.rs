@@ -1,4 +1,5 @@
 use crate::field::kyber::{fqmul, KyberFq, MONT};
+
 use crate::utils::split::*;
 use crate::{debug, field::*};
 
@@ -9,6 +10,8 @@ pub const KYBER_N: usize = 256;
 const ROOT_OF_UNITY: i16 = 17; // 2Nth (256-th) root of 1 mod Q
 
 pub type KyberPoly = Poly<KyberFq, { KYBER_N / 2 }>;
+
+pub const KYBER_POLYBYTES: usize = { KyberPoly::N } * 3;
 
 const ZETAS: [i16; KyberPoly::N - 1] = {
     let mut zetas = [0i16; KyberPoly::N - 1];
@@ -24,9 +27,8 @@ const ZETAS: [i16; KyberPoly::N - 1] = {
     zetas
 };
 
-impl Polynomial for KyberPoly {
+impl Polynomial<{ KYBER_N / 2 }> for KyberPoly {
     type F = KyberFq;
-    const N: usize = KYBER_N / 2;
 
     // const INV_NTT_SCALE: <Self::F as Field>::E = 512;
     const INV_NTT_SCALE: <Self::F as Field>::E = 1441;
@@ -51,21 +53,27 @@ impl Polynomial for KyberPoly {
 }
 
 impl KyberPoly {
-    pub fn to_bytes(&self, r: &mut [u8]) {
-        for (f, r) in self.into_iter().zip(r.chunks_exact_mut(3)) {
+    pub fn to_bytes(&self, bytes: &mut [u8; KYBER_POLYBYTES]) {
+        for (f, r) in self.as_ref().iter().zip(bytes.into_array_mut_iter::<3>()) {
             // map to positive standard representatives
             let f = f.freeze();
-            let (t0, t1) = (f.0[0], f.0[1]);
-            r[0] = (t0 >> 0) as u8;
+            let [t0, t1] = f.0;
+            r[0] = t0 as u8;
             r[1] = ((t0 >> 8) | (t1 << 4)) as u8;
             r[2] = (t1 >> 4) as u8;
         }
     }
 
-    pub fn from_bytes(&mut self, a: &[u8]) {
-        for (f, a) in self.into_iter().zip(a.chunks_exact(3)) {
-            f.0[0] = ((a[0] >> 0) as u16 | ((a[1] as u16) << 8) & 0xFFF) as i16;
-            f.0[1] = ((a[1] >> 4) as u16 | ((a[2] as u16) << 4) & 0xFFF) as i16;
+    pub fn from_bytes(&mut self, bytes: &[u8]) {
+        for (f, a) in self
+            .as_mut()
+            .iter_mut()
+            .zip(bytes.into_array_ref_iter::<3>())
+        {
+            f.0 = [
+                ((a[0] >> 0) as u16 | ((a[1] as u16) << 8) & 0xFFF) as i16,
+                ((a[1] >> 4) as u16 | ((a[2] as u16) << 4) & 0xFFF) as i16,
+            ];
         }
     }
 
@@ -132,6 +140,16 @@ impl KyberPoly {
                 c.0[1] = a - b;
             }
         }
+    }
+
+    #[inline(always)]
+    pub fn ntt_and_reduce(&mut self) {
+        self.ntt();
+        self.reduce();
+    }
+
+    pub fn into_array(&self) -> [<KyberFq as Field>::E; KYBER_N] {
+        array_init::array_init(|i: usize| self[i / 2].0[i % 2])
     }
 
     //
@@ -282,10 +300,6 @@ impl KyberPoly {
         }
         // rng.try_fill(&mut poly.0).expect("Failed to fill Poly");
         poly
-    }
-
-    pub fn into_array(&self) -> [i16; KYBER_N] {
-        array_init::array_init(|i: usize| self[i / 2].0[i % 2])
     }
 }
 

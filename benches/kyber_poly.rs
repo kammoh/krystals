@@ -1,36 +1,56 @@
+use core::time::Duration;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rand::{thread_rng, Rng};
-
 use crystals::poly::{kyber::KyberPoly, Polynomial};
+use crystals_cref::kyber as cref;
+use rand::thread_rng;
 
 fn kyber_ntt_bench(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Kyber poly NTT");
+
     let mut rng = thread_rng();
     let mut poly = KyberPoly::new_random(&mut rng);
 
-    c.bench_function("rust kyber NTT", |b| {
+    group.bench_function("Rust", |b| {
         b.iter(|| {
-            KyberPoly::ntt(black_box(&mut poly));
-            KyberPoly::reduce(black_box(&mut poly))
+            KyberPoly::ntt_and_reduce(black_box(&mut poly));
         })
     });
+
+    let mut poly = poly.into_array();
+
+    group.bench_function("C", |b| b.iter(|| cref::ntt(black_box(&mut poly))));
+
+    group.finish();
 }
 
 fn kyber_invntt_bench(c: &mut Criterion) {
-    let mut rng = thread_rng();
-    let mut pv = KyberPoly::new_random(&mut rng);
+    let mut group = c.benchmark_group("Kyber poly INV_NTT");
 
-    c.bench_function("rust kyber INV_NTT", |b| {
-        b.iter(|| KyberPoly::inv_ntt(black_box(&mut pv)))
+    let mut rng = thread_rng();
+    let mut poly = KyberPoly::new_random(&mut rng);
+
+    group.bench_function("Rust", |b| {
+        b.iter(|| {
+            KyberPoly::inv_ntt(black_box(&mut poly));
+        })
     });
+
+    let mut poly = poly.into_array();
+
+    group.bench_function("C", |b| b.iter(|| cref::inv_ntt(black_box(&mut poly))));
+
+    group.finish();
 }
 
 fn kyber_pwm_bench(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Kyber poly PWM");
+
     let mut rng = thread_rng();
     let poly_a = KyberPoly::new_random(&mut rng);
     let poly_b = KyberPoly::new_random(&mut rng);
     let mut poly_r = KyberPoly::default();
 
-    c.bench_function("rust kyber PWM", |b| {
+    group.bench_function("Rust", |b| {
         b.iter(|| {
             KyberPoly::pointwise(
                 black_box(&poly_a),
@@ -39,57 +59,37 @@ fn kyber_pwm_bench(c: &mut Criterion) {
             )
         })
     });
-}
 
-fn kyber_cref_ntt(c: &mut Criterion) {
-    let mut rng = thread_rng();
-    let mut poly = [0i16; 256];
-
-    rng.fill(&mut poly);
-
-    c.bench_function("C kyber NTT", |b| {
-        b.iter(|| crystals_cref::kyber::ntt(black_box(&mut poly)))
-    });
-}
-
-fn kyber_cref_invntt(c: &mut Criterion) {
-    let mut rng = thread_rng();
-    let mut poly = [0i16; 256];
-
-    rng.fill(&mut poly);
-
-    c.bench_function("C kyber INV_NTT", |b| {
-        b.iter(|| crystals_cref::kyber::inv_ntt(black_box(&mut poly)))
-    });
-}
-
-fn kyber_cref_pwm(c: &mut Criterion) {
-    let mut rng = thread_rng();
-    let mut poly_a = [0i16; 256];
-    let mut poly_b = [0i16; 256];
+    let poly_a = poly_a.into_array();
+    let poly_b = poly_b.into_array();
     let mut poly_r = [0i16; 256];
 
-    rng.fill(&mut poly_a);
-    rng.fill(&mut poly_b);
-    rng.fill(&mut poly_r);
-
-    c.bench_function("C kyber PWM", |b| {
+    group.bench_function("C", |b| {
         b.iter(|| {
-            crystals_cref::kyber::poly_pointwise_montgomery(
+            cref::poly_pointwise_montgomery(
                 black_box(&mut poly_r),
                 black_box(&poly_a),
                 black_box(&poly_b),
             )
         })
     });
+
+    group.finish();
 }
 
 criterion_group! {
     name = kyber_poly_bench;
-    // This can be any expression that returns a `Criterion` object.
-    // config = Criterion::default().significance_level(0.1).sample_size(500);
-    config = Criterion::default().sample_size(2500);
-    targets = kyber_ntt_bench, kyber_cref_ntt, kyber_invntt_bench, kyber_cref_invntt, kyber_pwm_bench, kyber_cref_pwm
+    // significance_level: (default = 0.05) This presents a trade-off. By setting the significance level closer to 0.0, you can increase the statistical
+    // robustness against noise, but it also weakens Criterion.rs' ability to detect small but real changes in the
+    // performance. By setting the significance level closer to 1.0, Criterion.rs will be more able to detect small
+    // true changes, but will also report more spurious differences.
+
+    config = Criterion::default()
+        .significance_level(0.035)
+        .noise_threshold(0.02)
+        .measurement_time(Duration::new(6, 0))
+        .sample_size(2500);
+    targets = kyber_ntt_bench, kyber_invntt_bench, kyber_pwm_bench
 }
 
 criterion_main!(kyber_poly_bench);

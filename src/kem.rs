@@ -1,4 +1,4 @@
-use crate::{indcpa::pke, params::*, unsafe_utils::*};
+use crate::{indcpa::pke, params::*, unsafe_utils::*, poly::kyber::KYBER_POLYBYTES};
 
 // use super::hash::*;
 // use rand::RngCore;

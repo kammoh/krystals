@@ -6,6 +6,10 @@ edition = "2021"
 license = "Apache-2.0"
 readme = "README.md"
 categories = ["cryptography", "no-std"]
+autobenches = true
+
+[lib]
+bench = false # disable libtest benchmark harness
 
 [dependencies]
 array-init = "2.0.1"

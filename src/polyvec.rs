@@ -1,37 +1,64 @@
 use core::ops::{AddAssign, Index, IndexMut, Mul};
 
-use rand::{RngCore, CryptoRng};
+use rand::{CryptoRng, RngCore};
 
-use crate::{params::*, poly::{kyber::KyberPoly, dilithium::DilithiumPoly}};
+use crate::{
+    params::*,
+    poly::{
+        dilithium::DilithiumPoly,
+        kyber::{KyberPoly, KYBER_POLYBYTES},
+    },
+};
 
 use super::poly::Polynomial;
 
 #[derive(Debug, Clone, Copy)]
-pub struct PolyVec<P: Polynomial, const K: usize>([P; K]);
+pub struct PolyVec<P, const N: usize, const K: usize>([P; K])
+where
+    P: Polynomial<N>;
 
-impl<P: Polynomial, const K: usize> Default for PolyVec<P, K> {
+impl<P, const N: usize, const K: usize> Default for PolyVec<P, N, K>
+where
+    P: Polynomial<N>,
+{
     fn default() -> Self {
         PolyVec([P::default(); K])
     }
 }
 
-impl<P: Polynomial, const K: usize> Index<usize> for PolyVec<P, K> {
+impl<P, const N: usize, const K: usize> Index<usize> for PolyVec<P, N, K>
+where
+    P: Polynomial<N>,
+{
     type Output = P;
     fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
         &self.0[i]
     }
 }
 
-impl<P: Polynomial, const K: usize> IndexMut<usize> for PolyVec<P, K> {
+impl<P, const N: usize, const K: usize> IndexMut<usize> for PolyVec<P, N, K>
+where
+    P: Polynomial<N>,
+{
     fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
         &mut self.0[i]
     }
 }
 
-impl<P: Polynomial, const K: usize> PolyVec<P, K> {
+impl<P, const N: usize, const K: usize> PolyVec<P, N, K>
+where
+    P: Polynomial<N>,
+{
     pub fn ntt(&mut self) {
         for poly in self.0.iter_mut() {
             poly.ntt();
+        }
+    }
+
+    pub fn ntt_and_reduce(&mut self) {
+        for poly in self.0.iter_mut() {
+            poly.ntt();
+            poly.reduce();
         }
     }
 
@@ -146,8 +173,10 @@ impl<P: Polynomial, const K: usize> PolyVec<P, K> {
     //     }
 }
 
-
-impl<P: Polynomial, const K: usize> AddAssign<&Self> for PolyVec<P, K> {
+impl<P, const N: usize, const K: usize> AddAssign<&Self> for PolyVec<P, N, K>
+where
+    P: Polynomial<N>,
+{
     fn add_assign(&mut self, rhs: &Self) {
         for i in 0..K {
             self[i] += &rhs[i];
@@ -155,7 +184,7 @@ impl<P: Polynomial, const K: usize> AddAssign<&Self> for PolyVec<P, K> {
     }
 }
 
-// impl<P: Polynomial, const K: usize> Mul<&Self> for PolyVec<P, K> {
+// impl<P, const N: usize, const K: usize> Mul<&Self> for PolyVec<P, N, K> {
 //     type Output = Poly<T, N>;
 
 //     #[inline(always)]
@@ -216,9 +245,9 @@ impl<P: Polynomial, const K: usize> AddAssign<&Self> for PolyVec<P, K> {
 //     }
 // }
 
-impl<const K: usize> PolyVec<KyberPoly, K> {
+impl<const K: usize> PolyVec<KyberPoly, { KyberPoly::N }, K> {
     pub fn from_bytes(bytes: &[[u8; KYBER_POLYBYTES]; K]) -> Self {
-        let mut pv = PolyVec::<KyberPoly, K>::default();
+        let mut pv = PolyVec::<KyberPoly, { KyberPoly::N }, K>::default();
         for i in 0..K {
             pv[i].from_bytes(&bytes[i]);
         }
@@ -231,10 +260,11 @@ impl<const K: usize> PolyVec<KyberPoly, K> {
         }
     }
 }
+pub type KyberPolyVec<const K: usize> = PolyVec<KyberPoly, { KyberPoly::N }, K>;
 
-impl<const K: usize> PolyVec<KyberPoly, K> {
+impl<const K: usize> KyberPolyVec<K> {
     pub fn new_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let mut pv = PolyVec::<KyberPoly, K>::default();
+        let mut pv = KyberPolyVec::<K>::default();
         for i in 0..K {
             pv[i] = KyberPoly::new_random(rng);
         }
@@ -242,10 +272,11 @@ impl<const K: usize> PolyVec<KyberPoly, K> {
     }
 }
 
+pub type DilithiumPolyVec<const K: usize> = PolyVec<DilithiumPoly, { DilithiumPoly::N }, K>;
 
-impl<const K: usize> PolyVec<DilithiumPoly, K> {
+impl<const K: usize> DilithiumPolyVec<K> {
     pub fn new_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let mut pv = PolyVec::<DilithiumPoly, K>::default();
+        let mut pv = DilithiumPolyVec::<K>::default();
         for i in 0..K {
             pv[i] = DilithiumPoly::new_random(rng);
         }

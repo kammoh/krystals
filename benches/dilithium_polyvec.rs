@@ -1,78 +1,81 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rand::{thread_rng, Rng};
+use core::time::Duration;
+use criterion::{
+    black_box, criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup,
+    BenchmarkId, Criterion,
+};
+use rand::Rng;
 
-use crystals::{poly::dilithium::DilithiumPoly, polyvec::PolyVec};
+use crystals::polyvec::DilithiumPolyVec;
+use crystals_cref::dilithium as cref;
 
-#[inline]
-fn dilithium_ntt_bench<const K: usize>(c: &mut Criterion) {
-    let mut rng = thread_rng();
-    let mut pv = PolyVec::<DilithiumPoly, K>::new_random(&mut rng);
+fn dilithium_ntt_bench_gen<M: Measurement, const K: usize>(group: &mut BenchmarkGroup<M>) {
+    let mut rng = rand::thread_rng();
+    let mut pv = DilithiumPolyVec::<K>::new_random(&mut rng);
+    let k_size_str = format!("K={}", K);
 
-    c.bench_function(format!("rust dilithium NTT polyvec K={}", K).as_str(), |b| {
-        b.iter(|| PolyVec::<DilithiumPoly, K>::ntt(black_box(&mut pv)))
+    group.bench_function(BenchmarkId::new("Rust", &k_size_str), |b| {
+        b.iter(|| DilithiumPolyVec::<K>::ntt(black_box(&mut pv)))
     });
-}
 
-#[inline]
-fn dilithium_invntt_bench<const K: usize>(c: &mut Criterion) {
-    let mut rng = thread_rng();
-    let mut pv = PolyVec::<DilithiumPoly, K>::new_random(&mut rng);
-
-    c.bench_function(format!("rust dilithium INV_NTT polyvec K={}", K).as_str(), |b| {
-        b.iter(|| PolyVec::<DilithiumPoly, K>::invntt_tomont(black_box(&mut pv)))
-    });
-}
-
-#[inline]
-fn dilithium_cref_ntt<const K: usize>(c: &mut Criterion) {
-    let mut rng = thread_rng();
     let mut pv = [[0i32; 256]; K];
 
     for p in pv.iter_mut() {
         rng.fill(p);
     }
 
-    c.bench_function(format!("cref dilithium NTT polyvec K={}", K).as_str(), |b| {
-        b.iter(|| crystals_cref::dilithium::polyveck_ntt::<K>(black_box(&mut pv)))
+    group.bench_function(BenchmarkId::new("C", &k_size_str), |b| {
+        b.iter(|| cref::polyveck_ntt::<K>(black_box(&mut pv)))
     });
 }
 
-#[inline]
-fn dilithium_cref_invntt<const K: usize>(c: &mut Criterion) {
-    let mut rng = thread_rng();
+fn dilithium_invntt_bench_gen<M: Measurement, const K: usize>(group: &mut BenchmarkGroup<M>) {
+    let mut rng = rand::thread_rng();
+    let mut pv = DilithiumPolyVec::<K>::new_random(&mut rng);
+    let k_size_str = format!("K={}", K);
+
+    group.bench_function(BenchmarkId::new("Rust", &k_size_str), |b| {
+        b.iter(|| DilithiumPolyVec::<K>::invntt_tomont(black_box(&mut pv)))
+    });
+
     let mut pv = [[0i32; 256]; K];
 
     for p in pv.iter_mut() {
         rng.fill(p);
     }
 
-    c.bench_function(format!("C ref dilithium INV_NTT polyvec  K={}", K).as_str(), |b| {
-        b.iter(|| crystals_cref::dilithium::polyveck_invntt_tomont::<K>(black_box(&mut pv)))
+    group.bench_function(BenchmarkId::new("C", &k_size_str), |b| {
+        b.iter(|| cref::polyveck_invntt_tomont::<K>(black_box(&mut pv)))
     });
 }
 
-pub fn dilithium_cref_ntt_bench_4(c: &mut Criterion) {
-    dilithium_cref_ntt::<4>(c);
+pub fn dilithium_ntt_bench(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Dilithium PolyVec NTT");
+
+    dilithium_ntt_bench_gen::<_, 4>(&mut group);
+    dilithium_ntt_bench_gen::<_, 6>(&mut group);
+    dilithium_ntt_bench_gen::<_, 8>(&mut group);
+
+    group.finish();
 }
 
-pub fn dilithium_cref_invntt_bench_4(c: &mut Criterion) {
-    dilithium_cref_invntt::<4>(c);
-}
+pub fn dilithium_invntt_bench(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Dilithium PolyVec INV_NTT");
 
-pub fn dilithium_ntt_bench_4(c: &mut Criterion) {
-    dilithium_ntt_bench::<4>(c);
-}
+    dilithium_invntt_bench_gen::<_, 4>(&mut group);
+    dilithium_invntt_bench_gen::<_, 6>(&mut group);
+    dilithium_invntt_bench_gen::<_, 8>(&mut group);
 
-pub fn dilithium_invntt_bench_4(c: &mut Criterion) {
-    dilithium_invntt_bench::<4>(c);
+    group.finish();
 }
 
 criterion_group! {
     name = dilithium_polyvec;
-    // This can be any expression that returns a `Criterion` object.
-    // config = Criterion::default().significance_level(0.1).sample_size(500);
-    config = Criterion::default().sample_size(2000);
-    targets = dilithium_ntt_bench_4, dilithium_cref_ntt_bench_4, dilithium_invntt_bench_4, dilithium_cref_invntt_bench_4
+    config = Criterion::default()
+        .significance_level(0.04)
+        .noise_threshold(0.015)
+        .measurement_time(Duration::new(8, 0))
+        .sample_size(1500);
+    targets = dilithium_ntt_bench, dilithium_invntt_bench
 }
 
 criterion_main!(dilithium_polyvec);

@@ -1,13 +1,17 @@
 use crate::{poly::Polynomial, polyvec::*};
 
-use core::ops::{Index, IndexMut, Mul};
-
 #[derive(Clone)]
-pub struct PolyMat<P: Polynomial, const K: usize> {
-    pub vec: [PolyVec<P, K>; K],
+pub struct PolyMat<P, const N: usize, const K: usize>
+where
+    P: Polynomial<N>,
+{
+    pub vec: [PolyVec<P, N, K>; K],
 }
 
-impl<P: Polynomial, const K: usize> Default for PolyMat<P, K> {
+impl<P, const N: usize, const K: usize> Default for PolyMat<P, N, K>
+where
+    P: Polynomial<N>,
+{
     fn default() -> Self {
         Self {
             vec: [PolyVec::default(); K],

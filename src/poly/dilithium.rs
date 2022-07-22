@@ -26,10 +26,8 @@ const ZETAS: [i32; DILITHIUM_N - 1] = {
     zetas
 };
 
-impl Polynomial for DilithiumPoly {
+impl Polynomial<DILITHIUM_N> for DilithiumPoly {
     type F = DilithiumFq;
-
-    const N: usize = DILITHIUM_N;
 
     const INV_NTT_SCALE: <Self::F as Field>::E = 41_978;
 
@@ -73,6 +71,11 @@ impl DilithiumPoly {
         }
         poly
     }
+
+    pub fn into_array(&self) -> [<<Self as Polynomial<{ Self::N }>>::F as Field>::E; Self::N] {
+        // array_init::array_init(|i: usize| self[i].0)
+        self.0.map(|x| x.0)
+    }
 }
 
 #[cfg(test)]
@@ -114,10 +117,7 @@ mod tests {
         for _ in 0..3_000 {
             let mut poly = DilithiumPoly::new_random(&mut rng);
             // println!("poly before ntt: {:?}", poly);
-            let mut p = [0i32; DilithiumPoly::N];
-            for (x, y) in p.iter_mut().zip(poly) {
-                *x = y.0;
-            }
+            let mut p = poly.into_array();
             poly.ntt();
             // poly.reduce();
             // println!("poly after ntt: {:?}", poly);

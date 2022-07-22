@@ -65,7 +65,7 @@ pub fn polyveck_ntt<const K: usize>(pv: &mut [CPoly; K]) {
             bindings_3::pqcrystals_dilithium3_ref_polyveck_ntt(pv.as_mut_ptr() as *mut _);
         },
         8 => unsafe {
-            bindings_3::pqcrystals_dilithium3_ref_polyveck_ntt(pv.as_mut_ptr() as *mut _);
+            bindings_5::pqcrystals_dilithium5_ref_polyveck_ntt(pv.as_mut_ptr() as *mut _);
         },
         _ => unreachable!(),
     }
@@ -82,7 +82,7 @@ pub fn polyveck_invntt_tomont<const K: usize>(pv: &mut [CPoly; K]) {
             bindings_3::pqcrystals_dilithium3_ref_polyveck_invntt_tomont(pv.as_mut_ptr() as *mut _);
         },
         8 => unsafe {
-            bindings_3::pqcrystals_dilithium3_ref_polyveck_invntt_tomont(pv.as_mut_ptr() as *mut _);
+            bindings_5::pqcrystals_dilithium5_ref_polyveck_invntt_tomont(pv.as_mut_ptr() as *mut _);
         },
         _ => unreachable!(),
     }
