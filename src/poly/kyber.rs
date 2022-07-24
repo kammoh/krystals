@@ -1,7 +1,7 @@
 use crate::field::kyber::{fqmul, KyberFq, MONT};
 
+use crate::field::{*, kyber::KYBER_Q};
 use crate::utils::split::*;
-use crate::{debug, field::*};
 
 use super::{Poly, Polynomial};
 
@@ -30,8 +30,7 @@ const ZETAS: [i16; KyberPoly::N - 1] = {
 impl Polynomial<{ KYBER_N / 2 }> for KyberPoly {
     type F = KyberFq;
 
-    // const INV_NTT_SCALE: <Self::F as Field>::E = 512;
-    const INV_NTT_SCALE: <Self::F as Field>::E = 1441;
+    const INV_NTT_SCALE: <Self::F as Field>::E = 1441; // 512 to convert to non-mongomery form
 
     #[inline(always)]
     fn zetas(k: usize) -> <Self::F as Field>::E {
@@ -278,35 +277,30 @@ impl KyberPoly {
     // }
 }
 
-// #[cfg(test)]
+
+
+
 use rand::{CryptoRng, Rng, RngCore};
 
-// #[cfg(test)]
-use crate::field::kyber::KYBER_Q;
-
-// #[cfg(test)]
 impl KyberPoly {
+    #[doc(hidden)]
     pub fn new_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let mut poly = Self::default();
         fn frand<R: RngCore + CryptoRng>(rng: &mut R) -> i16 {
             rng.gen_range(-KYBER_Q / 2..=KYBER_Q / 2)
             // rng.gen_range(-KYBER_Q..=KYBER_Q)
         }
-        for i in 0..Self::N {
-            poly[i].0[0] = frand(rng);
-            poly[i].0[1] = frand(rng);
-            // poly[i].0[0] = 2 * i as i16; // rng.gen_range(-KYBER_Q / 2..=KYBER_Q / 2);
-            // poly[i].0[1] = 2 * i as i16 + 1; //rng.gen_range(-KYBER_Q / 2..=KYBER_Q / 2);
+        for c in poly.as_mut() {
+            c.0[0] = frand(rng);
+            c.0[1] = frand(rng);
         }
-        // rng.try_fill(&mut poly.0).expect("Failed to fill Poly");
         poly
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::field::kyber::{KyberFq, KYBER_Q};
-    use crate::params::*;
+    use crate::field::kyber::{KYBER_Q};
     use crate::utils::*;
 
     use super::*;
@@ -321,10 +315,9 @@ mod tests {
         let mut rng = rand::thread_rng();
         for testcase in 0..3_000 {
             let mut poly = KyberPoly::new_random(&mut rng);
-            let mut poly_copy = poly.clone();
+            let poly_copy = poly.clone();
             poly.ntt();
             poly.inv_ntt();
-            // poly_copy.reduce();
 
             for f in poly.as_mut() {
                 *f = *f * 1; // * R^-1

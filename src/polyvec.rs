@@ -263,6 +263,7 @@ impl<const K: usize> PolyVec<KyberPoly, { KyberPoly::N }, K> {
 pub type KyberPolyVec<const K: usize> = PolyVec<KyberPoly, { KyberPoly::N }, K>;
 
 impl<const K: usize> KyberPolyVec<K> {
+    #[doc(hidden)]
     pub fn new_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         let mut pv = KyberPolyVec::<K>::default();
         for i in 0..K {

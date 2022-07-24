@@ -1,13 +1,15 @@
 use core::fmt::Debug;
 use core::ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign};
+use core::slice::{Iter, IterMut};
 
-use crate::{debug, field::*};
+use crate::field::*;
 
 pub mod dilithium;
 pub mod kyber;
 
 pub trait Polynomial<const N: usize>:
     Index<usize, Output = Self::F>
+    + IntoIterator
     + IndexMut<usize, Output = Self::F>
     + AsRef<[Self::F; N]>
     + AsMut<[Self::F; N]>
@@ -138,6 +140,7 @@ pub trait Polynomial<const N: usize>:
     /// Applies Barrett reduction to all coefficients of a polynomial
     /// # Arguments
     /// * `r` - Input/output polynomial
+    #[inline]
     fn reduce(&mut self) {
         for f in self.as_mut() {
             *f = f.reduce();
@@ -197,53 +200,60 @@ pub trait Polynomial<const N: usize>:
 pub struct Poly<T: Field, const N: usize>([T; N]);
 
 impl<T: Field, const N: usize> Default for Poly<T, N> {
+    #[inline(always)]
     fn default() -> Self {
         Poly([T::default(); N])
     }
 }
 
 // impl<T: Field, const N: usize> AsRef<[T]> for Poly<T, N> {
+//     #[inline(always)]
 //     fn as_ref(&self) -> &[T] {
 //         &self.0
 //     }
 // }
 // impl<T: Field, const N: usize> AsMut<[T]> for Poly<T, N> {
+//     #[inline(always)]
 //     fn as_mut(&mut self) -> &mut [T] {
 //         &mut self.0
 //     }
 // }
 
-// impl<F: Field, const N: usize> IntoIterator for Poly<F, N> {
-//     type Item = F;
+impl<F: Field, const N: usize> IntoIterator for Poly<F, N> {
+    type Item = F;
 
-//     type IntoIter = IntoIter<F, N>;
+    type IntoIter = core::array::IntoIter<F, N>;
 
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.0.into_iter()
-//     }
-// }
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
 
-// impl<'a, F: Field, const N: usize> IntoIterator for &'a Poly<F, N> {
-//     type Item = &'a F;
-//     type IntoIter = Iter<'a, F>;
+impl<'a, F: Field, const N: usize> IntoIterator for &'a Poly<F, N> {
+    type Item = &'a F;
+    type IntoIter = Iter<'a, F>;
 
-//     fn into_iter(self) -> Iter<'a, F> {
-//         self.0.iter()
-//     }
-// }
+    #[inline(always)]
+    fn into_iter(self) -> Iter<'a, F> {
+        self.0.iter()
+    }
+}
 
-// impl<'a, F: Field, const N: usize> IntoIterator for &'a mut Poly<F, N> {
-//     type Item = &'a mut F;
-//     type IntoIter = IterMut<'a, F>;
+impl<'a, F: Field, const N: usize> IntoIterator for &'a mut Poly<F, N> {
+    type Item = &'a mut F;
+    type IntoIter = IterMut<'a, F>;
 
-//     #[inline]
-//     fn into_iter(self) -> IterMut<'a, F> {
-//         self.0.iter_mut()
-//     }
-// }
+    #[inline(always)]
+    fn into_iter(self) -> IterMut<'a, F> {
+        self.0.iter_mut()
+    }
+}
 
 impl<T: Field, const N: usize> Add<&Self> for Poly<T, N> {
     type Output = Self;
+
+    #[inline(always)]
     fn add(self, rhs: &Self) -> Self::Output {
         let mut cp = self.clone();
         cp += rhs;
@@ -252,6 +262,8 @@ impl<T: Field, const N: usize> Add<&Self> for Poly<T, N> {
 }
 impl<T: Field, const N: usize> Sub<&Self> for Poly<T, N> {
     type Output = Self;
+
+    #[inline(always)]
     fn sub(self, rhs: &Self) -> Self::Output {
         let mut cp = self.clone();
         cp -= rhs;
@@ -263,6 +275,7 @@ impl<T: Field, const N: usize> Sub<&Self> for Poly<T, N> {
 /// # Arguments
 /// * `rhs` - Righthand-side input polynomial
 impl<T: Field, const N: usize> AddAssign<&Self> for Poly<T, N> {
+    #[inline(always)]
     fn add_assign(&mut self, rhs: &Self) {
         for i in 0..self.0.len() {
             self[i] += rhs[i];
@@ -274,6 +287,7 @@ impl<T: Field, const N: usize> AddAssign<&Self> for Poly<T, N> {
 /// # Arguments
 /// * `rhs` - Righthand-side input polynomial
 impl<T: Field, const N: usize> SubAssign<&Self> for Poly<T, N> {
+    #[inline(always)]
     fn sub_assign(&mut self, rhs: &Self) {
         for i in 0..self.0.len() {
             self[i] -= rhs[i];
@@ -283,24 +297,28 @@ impl<T: Field, const N: usize> SubAssign<&Self> for Poly<T, N> {
 
 impl<T: Field, const N: usize> Index<usize> for Poly<T, N> {
     type Output = T;
+    #[inline(always)]
     fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
         &self.0[i]
     }
 }
 
 impl<T: Field, const N: usize> IndexMut<usize> for Poly<T, N> {
+    #[inline(always)]
     fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
         &mut self.0[i]
     }
 }
 
 impl<F: Field, const N: usize> AsRef<[F; N]> for Poly<F, N> {
+    #[inline(always)]
     fn as_ref(&self) -> &[F; N] {
         &self.0
     }
 }
 
 impl<F: Field, const N: usize> AsMut<[F; N]> for Poly<F, N> {
+    #[inline(always)]
     fn as_mut(&mut self) -> &mut [F; N] {
         &mut self.0
     }

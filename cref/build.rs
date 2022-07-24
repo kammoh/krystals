@@ -7,7 +7,7 @@ use std::{
 
 use cargo_emit::{rerun_if_changed, rustc_link_lib, rustc_link_search};
 
-trait Algorithm {
+trait Scheme {
     fn alg_name(&self) -> &'static str;
 
     fn variant_name(&self, level: u8) -> &'static str;
@@ -25,7 +25,7 @@ trait Algorithm {
 
 struct Kyber;
 
-impl Algorithm for Kyber {
+impl Scheme for Kyber {
     fn alg_name(&self) -> &'static str {
         "kyber"
     }
@@ -54,7 +54,7 @@ impl Algorithm for Kyber {
 }
 struct Dilithium;
 
-impl Algorithm for Dilithium {
+impl Scheme for Dilithium {
     fn alg_name(&self) -> &'static str {
         "dilithium"
     }
@@ -73,7 +73,7 @@ impl Algorithm for Dilithium {
     }
 }
 
-fn compile_lib(alg: &dyn Algorithm, level: u8) {
+fn compile_lib(alg: &dyn Scheme, level: u8) {
     let ref_dir = alg.ref_path();
     rerun_if_changed!(ref_dir.to_str().unwrap());
 
@@ -142,13 +142,10 @@ fn compile_lib(alg: &dyn Algorithm, level: u8) {
         .include(ref_dir)
         .out_dir(&out_path)
         .opt_level(3)
-        // .flag("-O3")
         .force_frame_pointer(false)
-        // .flag("-fomit-frame-pointer")
         .flag_if_supported("-march=native")
         .flag_if_supported("-mtune=native")
         .debug(false)
-        // .flag("-g0")
         .define(
             alg.sec_param_name(),
             Some(alg.sec_param_value(level).to_string().as_str()),
