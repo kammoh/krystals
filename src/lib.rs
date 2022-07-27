@@ -7,6 +7,7 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+pub(crate) mod utils;
 
 pub mod field;
 pub mod keccak;
@@ -17,6 +18,5 @@ pub mod pke;
 pub mod poly;
 pub mod polymat;
 pub mod polyvec;
-pub(crate) mod unsafe_utils;
-pub(crate) mod utils;
+
 pub use kem::*;

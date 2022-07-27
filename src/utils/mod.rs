@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-pub(crate) mod split;
+pub(crate) mod unsafe_utils;
+pub(crate) use unsafe_utils::*;
 
 use crate::field::NumLike;
 

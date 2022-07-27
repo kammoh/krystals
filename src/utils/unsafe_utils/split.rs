@@ -118,6 +118,9 @@ pub(crate) trait Splitter<'a, T> {
 pub(crate) trait ArraySplitter<T> {
     fn dissect_ref<const N1: usize, const N2: usize>(&self) -> (&[T; N1], &[T; N2]);
 }
+pub(crate) trait ArraySplitterMut<T> {
+    fn dissect_mut<const N1: usize, const N2: usize>(&mut self) -> (&mut [T; N1], &mut [T; N2]);
+}
 
 impl<T: Sized, const N: usize> ArraySplitter<T> for [T; N] {
     fn dissect_ref<const N1: usize, const N2: usize>(&self) -> (&[T; N1], &[T; N2]) {
@@ -134,10 +137,31 @@ impl<T: Sized, const N: usize> ArraySplitter<T> for [T; N] {
         }
     }
 }
+impl<T: Sized, const N: usize> ArraySplitterMut<T> for [T; N] {
+    fn dissect_mut<const N1: usize, const N2: usize>(&mut self) -> (&mut [T; N1], &mut [T; N2]) {
+        assert_eq!(N1 + N2, N);
+        let (left, right) = self.split_at_mut(N1);
+        #[allow(unsafe_code)]
+        // SAFETY: 'left' points to [T; N1] as it's [T] of length N1 (checked by split_at)
+        //         'right' points to [T; N2] as it's [T] of length (N - N1) = N2 (above assert would paniced otherwise)
+        unsafe {
+            (
+                &mut *(left.as_mut_ptr() as *mut [T; N1]),
+                &mut *(right.as_mut_ptr() as *mut [T; N2]),
+            )
+        }
+    }
+}
 
 impl<T: Sized, const N: usize> ArraySplitter<T> for &[T; N] {
     fn dissect_ref<const N1: usize, const N2: usize>(&self) -> (&[T; N1], &[T; N2]) {
         (*self).dissect_ref()
+    }
+}
+
+impl<T: Sized, const N: usize> ArraySplitterMut<T> for &mut [T; N] {
+    fn dissect_mut<const N1: usize, const N2: usize>(&mut self) -> (&mut [T; N1], &mut [T; N2]) {
+        (*self).dissect_mut()
     }
 }
 

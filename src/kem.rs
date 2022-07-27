@@ -1,7 +1,15 @@
-use crate::{pke, params::*, poly::kyber::KYBER_POLYBYTES, unsafe_utils::*};
+use crate::{pke, params::*, poly::kyber::KYBER_POLYBYTES};
 
 // use super::hash::*;
 // use rand::RngCore;
+
+
+#[derive(Debug)]
+pub enum KyberError {
+    DecapsFailure, // Re-encapsulated message did not match provided ciphertex. Most probably an invalid ciphertext. Returned by decap.
+    RngFailure, // was not able to retrieve required random from RNG. Returned by encap and keypair.
+}
+
 
 #[derive(Clone)]
 pub struct PublicKey<const K: usize> {
