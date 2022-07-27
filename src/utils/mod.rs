@@ -1,6 +1,9 @@
+#![allow(dead_code)]
+
 pub(crate) mod split;
 
 use crate::field::NumLike;
+
 
 pub(crate) const fn ceil_div<const X: usize>(n: usize) -> usize {
     (n + (X - 1)) / X

@@ -1,6 +1,8 @@
 use crate::field::kyber::{fqmul, KyberFq, MONT};
 
-use crate::field::{*, kyber::KYBER_Q};
+use crate::field::{kyber::KYBER_Q, *};
+use crate::keccak::fips202::Shake128Params;
+use crate::keccak::KeccakParams;
 use crate::utils::split::*;
 
 use super::{Poly, Polynomial};
@@ -40,20 +42,50 @@ impl Polynomial<{ KYBER_N / 2 }> for KyberPoly {
     fn pointwise(&self, other: &Self, result: &mut Self) {
         for (((tr, ta), tb), zeta) in result
             .as_mut()
-            .into_array_mut_iter::<2>()
-            .zip(self.as_ref().into_array_ref_iter::<2>())
-            .zip(other.as_ref().into_array_ref_iter::<2>())
+            .into_array_chunks_mut::<2>()
+            .zip(self.as_ref().into_array_chunks_iter::<2>())
+            .zip(other.as_ref().into_array_chunks_iter::<2>())
             .zip(ZETAS[63..].iter())
         {
             tr[0] = ta[0].basemul(tb[0], *zeta);
             tr[1] = ta[1].basemul(tb[1], -*zeta);
         }
     }
+
+    fn rej_uniform(&mut self, mut ctr: usize, bytes: &[u8; Shake128Params::RATE_BYTES]) -> usize {
+        debug_assert!(ctr < KYBER_N);
+        debug_assert!(Shake128Params::RATE_BYTES % 3 == 0);
+
+        // TODO compare performance vs safe
+        let p: &mut [i16; KYBER_N] = self.as_scalar_array_mut();
+
+        for buf in bytes.chunks_exact(3) {
+            // TODO compare with iterator
+            if ctr >= KYBER_N {
+                break;
+            }
+            let val0 = ((buf[0] >> 0) as u16 | (buf[1] as u16) << 8) & 0xFFF;
+            if val0 < KYBER_Q as u16 {
+                p[ctr] = val0 as i16;
+                ctr += 1;
+            }
+
+            if ctr >= KYBER_N {
+                break;
+            }
+            let val1 = ((buf[1] >> 4) as u16 | (buf[2] as u16) << 4) & 0xFFF;
+            if val1 < KYBER_Q as u16 {
+                p[ctr] = val1 as i16;
+                ctr += 1;
+            }
+        }
+        ctr
+    }
 }
 
 impl KyberPoly {
     pub fn to_bytes(&self, bytes: &mut [u8; KYBER_POLYBYTES]) {
-        for (f, r) in self.as_ref().iter().zip(bytes.into_array_mut_iter::<3>()) {
+        for (f, r) in self.as_ref().iter().zip(bytes.into_array_chunks_mut::<3>()) {
             // map to positive standard representatives
             let f = f.freeze();
             let [t0, t1] = f.0;
@@ -67,7 +99,7 @@ impl KyberPoly {
         for (f, a) in self
             .as_mut()
             .iter_mut()
-            .zip(bytes.into_array_ref_iter::<3>())
+            .zip(bytes.into_array_chunks_iter::<3>())
         {
             f.0 = [
                 ((a[0] >> 0) as u16 | ((a[1] as u16) << 8) & 0xFFF) as i16,
@@ -84,8 +116,8 @@ impl KyberPoly {
 
         for (r, bytes) in self
             .as_mut()
-            .into_array_mut_iter::<4>()
-            .zip(buf.into_array_ref_iter::<4>())
+            .into_array_chunks_mut::<4>()
+            .zip(buf.into_array_chunks_iter::<4>())
         {
             let t = u32::from_le_bytes(*bytes);
             let d: u32 = (t & MASK55) + ((t >> 1) & MASK55);
@@ -117,8 +149,8 @@ impl KyberPoly {
 
         for (r, bytes) in self
             .as_mut()
-            .into_array_mut_iter::<2>()
-            .zip(buf.into_array_ref_iter::<3>())
+            .into_array_chunks_mut::<2>()
+            .zip(buf.into_array_chunks_iter::<3>())
         {
             let t = load24_littleendian(*bytes);
             let mut d = t & MASK249;
@@ -141,6 +173,31 @@ impl KyberPoly {
         }
     }
 
+    // fn getnoise_eta1<const K: usize, PRF: Prf>(
+    //     prf: &mut PRF,
+    //     seed: &[u8; KYBER_SYMBYTES],
+    //     nonce: u8,
+    // ) -> Self {
+    //     if K == 2 {
+    //         let mut poly = Self::default();
+    //         // let mut buf = [0u8; 3 * Self::N / 4]; // TODO avoid double initialization?
+    //         // prf.prf(&mut buf, seed, nonce);
+    //         // cbd3(&mut poly.0, &buf);
+    //         poly
+    //     } else {
+    //         Self::getnoise_eta2(prf, seed, nonce)
+    //     }
+    // }
+
+    // fn getnoise_eta2<PRF: Prf>(prf: &mut PRF, seed: &[u8; KYBER_SYMBYTES], nonce: u8) -> Self {
+    //     let mut poly = Poly::default();
+    //     // let mut buf = [0u8; Self::N / 2]; // TODO avoid double initialization?
+    //     // let mut buf = [0u8; 256 / 2]; // FIXME
+    //     // prf.prf(&mut buf, seed, nonce);
+    //     // cbd2(&mut poly.0, &mut buf);
+    //     poly
+    // }
+
     #[inline(always)]
     pub fn ntt_and_reduce(&mut self) {
         self.ntt();
@@ -149,6 +206,13 @@ impl KyberPoly {
 
     pub fn into_array(&self) -> [<KyberFq as Field>::E; KYBER_N] {
         array_init::array_init(|i: usize| self[i / 2].0[i % 2])
+    }
+
+    pub fn as_scalar_array_mut(&mut self) -> &mut [<KyberFq as Field>::E; KYBER_N] {
+        #[allow(unsafe_code)]
+        unsafe {
+            core::mem::transmute(self.as_mut())
+        }
     }
 
     //
@@ -277,9 +341,6 @@ impl KyberPoly {
     // }
 }
 
-
-
-
 use rand::{CryptoRng, Rng, RngCore};
 
 impl KyberPoly {
@@ -300,7 +361,7 @@ impl KyberPoly {
 
 #[cfg(test)]
 mod tests {
-    use crate::field::kyber::{KYBER_Q};
+    use crate::field::kyber::KYBER_Q;
     use crate::utils::*;
 
     use super::*;

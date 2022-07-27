@@ -6,6 +6,7 @@ edition = "2021"
 license = "Apache-2.0"
 readme = "README.md"
 categories = ["cryptography", "no-std"]
+rust-version = "1.62"
 autobenches = true
 
 [lib]
@@ -19,25 +20,34 @@ crunchy = { version = "0.2.2", default-features = false, features = [
 cty = "0.2.2"
 digest = "0.10.3"
 generic-array = "0.14.5"
-itertools = { version = "0.10.3", default-features = false }
 rand = { version = "0.8.5", default-features = false }
+secrecy = { version = "0.8.0", default-features = false }
+zeroize = { version = "1.5.7", default-features = false, features = [
+    "zeroize_derive",
+    "aarch64",
+] }
 
 [dev-dependencies]
-criterion = {version = "0.3.5", features = ["html_reports"]}
+criterion = { version = "0.3.5", features = ["html_reports"] }
 hex-literal = "0.3.4"
 rand = "0.8.5"
 crystals-cref = { path = "./cref" }
+sha3 = { version = "0.10.1", default-features = false }
+tiny-keccak = { version = "2.0.2", features = [
+    "fips202",
+    "keccak",
+    "sha3",
+    "shake",
+] }
 
 
 # [[bench]]
 # name = "kem_keypair_bench"
 # harness = false
 
-# [[bench]]
-# name = "keccak_bench"
-# harness = false
-
-
+[[bench]]
+name = "keccak_bench"
+harness = false
 
 [[bench]]
 name = "kyber_poly"
@@ -53,6 +63,10 @@ harness = false
 
 [[bench]]
 name = "dilithium_polyvec"
+harness = false
+
+[[bench]]
+name = "kyber_gen_matrix"
 harness = false
 
 [features]
@@ -76,3 +90,6 @@ debug = false
 opt-level = 3
 overflow-checks = false  # Disable integer overflow checks.
 incremental = true       # Speed up build times by caching intermediate results.
+
+[build-dependencies]
+autocfg = "1"

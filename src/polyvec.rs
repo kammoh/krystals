@@ -7,6 +7,7 @@ use crate::{
     poly::{
         dilithium::DilithiumPoly,
         kyber::{KyberPoly, KYBER_POLYBYTES},
+        UNIFORM_SEED_BYTES,
     },
 };
 
@@ -45,6 +46,26 @@ where
     }
 }
 
+impl<P, const N: usize, const K: usize> AsRef<[P; K]> for PolyVec<P, N, K>
+where
+    P: Polynomial<N>,
+{
+    #[inline(always)]
+    fn as_ref(&self) -> &[P; K] {
+        &self.0
+    }
+}
+
+impl<P, const N: usize, const K: usize> AsMut<[P; K]> for PolyVec<P, N, K>
+where
+    P: Polynomial<N>,
+{
+    #[inline(always)]
+    fn as_mut(&mut self) -> &mut [P; K] {
+        &mut self.0
+    }
+}
+
 impl<P, const N: usize, const K: usize> PolyVec<P, N, K>
 where
     P: Polynomial<N>,
@@ -71,6 +92,17 @@ where
     pub fn reduce(&mut self) {
         for poly in self.0.iter_mut() {
             poly.reduce();
+        }
+    }
+
+    #[inline]
+    pub fn uniform<const TRANSPOSED: bool>(&mut self, seed: &[u8; UNIFORM_SEED_BYTES], i: u8) {
+        for (j, poly) in self.as_mut().iter_mut().enumerate() {
+            if TRANSPOSED {
+                poly.uniform(seed, i, j as u8);
+            } else {
+                poly.uniform(seed, j as u8, i);
+            }
         }
     }
 

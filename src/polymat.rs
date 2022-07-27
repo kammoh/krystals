@@ -1,21 +1,22 @@
-use crate::{poly::Polynomial, polyvec::*};
+use core::ops::{Index, IndexMut};
 
-#[derive(Clone)]
-pub struct PolyMat<P, const N: usize, const K: usize>
+use crate::{
+    poly::{kyber::KyberPoly, Polynomial, UNIFORM_SEED_BYTES},
+    polyvec::*,
+};
+
+#[derive(Debug)]
+pub struct PolyMat<P, const N: usize, const K: usize, const L: usize>([PolyVec<P, N, L>; K])
+where
+    P: Polynomial<N>;
+
+impl<P, const N: usize, const K: usize, const L: usize> Default for PolyMat<P, N, K, L>
 where
     P: Polynomial<N>,
 {
-    pub vec: [PolyVec<P, N, K>; K],
-}
-
-impl<P, const N: usize, const K: usize> Default for PolyMat<P, N, K>
-where
-    P: Polynomial<N>,
-{
+    #[inline]
     fn default() -> Self {
-        Self {
-            vec: [PolyVec::default(); K],
-        }
+        Self([PolyVec::default(); K])
     }
 }
 
@@ -27,61 +28,143 @@ where
 //     }
 // }
 
-// impl<T: Field, const N: usize, const K: usize> Index<usize> for PolyMat<T, N, K> {
-//     type Output = PolyVec<T, N, K>;
-//     fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
-//         &self[i]
-//     }
-// }
+impl<P, const N: usize, const K: usize, const L: usize> Index<usize> for PolyMat<P, N, K, L>
+where
+    P: Polynomial<N>,
+{
+    type Output = PolyVec<P, N, L>;
 
-// impl<T: Field, const N: usize, const K: usize> IndexMut<usize> for PolyMat<T, N, K> {
-//     fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
-//         &mut self[i]
-//     }
-// }
+    #[inline(always)]
+    fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
+        &self.0[i]
+    }
+}
 
-// impl<T: Field, const N: usize, const K: usize> PolyMat<T, N, K> {
-//     #[inline]
-//     pub fn mult_vec(&self, polyvec: &PolyVec<T, N, K>) -> PolyVec<T, N, K> {
-//         let mut r = PolyVec::default();
+impl<P, const N: usize, const K: usize, const L: usize> IndexMut<usize> for PolyMat<P, N, K, L>
+where
+    P: Polynomial<N>,
+{
+    #[inline(always)]
+    fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
+        &mut self.0[i]
+    }
+}
 
-//         for i in 0..K {
-//             self[i].basemul_acc(&polyvec, &mut r[i]);
-//         }
-//         r
-//     }
-// }
+impl<P, const N: usize, const K: usize, const L: usize> AsRef<[PolyVec<P, N, L>; K]>
+    for PolyMat<P, N, K, L>
+where
+    P: Polynomial<N>,
+{
+    #[inline(always)]
+    fn as_ref(&self) -> &[PolyVec<P, N, L>; K] {
+        &self.0
+    }
+}
 
-// pub(crate) fn gen_matrix<const K: usize>(
-//     seed: &[u8; KYBER_SYMBYTES],
-//     transposed: bool,
-// ) -> PolyMat<KyberFq, KYBER_N, K> {
-//     let mut res = PolyMat::default();
-//     // let mut xof = Xof::new();
+impl<P, const N: usize, const K: usize, const L: usize> AsMut<[PolyVec<P, N, L>; K]>
+    for PolyMat<P, N, K, L>
+where
+    P: Polynomial<N>,
+{
+    #[inline(always)]
+    fn as_mut(&mut self) -> &mut [PolyVec<P, N, L>; K] {
+        &mut self.0
+    }
+}
 
-//     // const XOF_BLOCKBYTES: usize = Xof::RATE_BYTES;
+impl<P, const N: usize, const K: usize, const L: usize> PolyMat<P, N, K, L>
+where
+    P: Polynomial<N>,
+{
+    //     #[inline]
+    //     pub fn mult_vec(&self, polyvec: &PolyVec<T, N, K>) -> PolyVec<T, N, K> {
+    //         let mut r = PolyVec::default();
 
-//     // // assert!(XOF_BLOCKBYTES == 168);
+    //         for i in 0..K {
+    //             self[i].basemul_acc(&polyvec, &mut r[i]);
+    //         }
+    //         r
+    //     }
 
-//     // // technically not the same as ref implementation but equivalent
-//     // // TODO: what is the difference? why is this correct?
+    /// Expand seed to A matrix (or A^T if TRANSPOSED is true)
+    /// For Kyber:
+    ///
+    /// For dilithium:
+    ///                polyvec_matrix_expand TRANSPOSED = false
+    #[inline(always)]
+    pub fn gen_matrix<const TRANSPOSED: bool>(seed: &[u8; UNIFORM_SEED_BYTES]) -> Self {
+        let mut a = Self::default();
+        a.gen_matrix_into::<TRANSPOSED>(seed);
+        a
+    }
 
-//     // // this is number of XOF output rate blocks needed for 1 Poly
-//     // const GEN_MATRIX_NBLOCKS: usize =
-//     //     ceil_div::<XOF_BLOCKBYTES>(12 * KYBER_N / 8 * (1 << 12) / KYBER_Q as usize);
-//     // const BYTES_PER_POLY: usize = GEN_MATRIX_NBLOCKS * XOF_BLOCKBYTES;
+    #[inline(always)]
+    pub fn gen_a(seed: &[u8; UNIFORM_SEED_BYTES]) -> Self {
+        Self::gen_matrix::<false>(seed)
+    }
 
-//     // let mut buf = [0u8; next_multiple_of::<3>(BYTES_PER_POLY)];
+    #[inline(always)]
+    pub fn gen_at(seed: &[u8; UNIFORM_SEED_BYTES]) -> Self {
+        Self::gen_matrix::<true>(seed)
+    }
 
-//     // for i in 0..K {
-//     //     for j in 0..K {
-//     //         if transposed {
-//     //             xof.absorb(seed, i as u8, j as u8);
-//     //         } else {
-//     //             xof.absorb(seed, j as u8, i as u8);
-//     //         }
+    #[inline]
+    pub fn gen_matrix_into<const TRANSPOSED: bool>(&mut self, seed: &[u8; UNIFORM_SEED_BYTES]) {
+        for (i, vec) in self.as_mut().iter_mut().enumerate() {
+            vec.uniform::<TRANSPOSED>(seed, i as u8);
+        }
+    }
+}
 
-//     //     }
-//     // }
-//     res
-// }
+pub type KyberMatrix<const K: usize> = PolyMat<KyberPoly, { KyberPoly::N }, K, K>;
+
+#[cfg(test)]
+mod tests {
+    use rand::Rng;
+
+    use crate::poly::kyber::KYBER_N;
+
+    use super::*;
+
+    #[test]
+    fn gen_matrix() {
+        gen_matrix_x::<2, true>();
+        gen_matrix_x::<3, true>();
+        gen_matrix_x::<4, true>();
+        gen_matrix_x::<2, false>();
+        gen_matrix_x::<3, false>();
+        gen_matrix_x::<4, false>();
+    }
+
+    fn gen_matrix_x<const K: usize, const TRANSPOSED: bool>() {
+        let mut seed = [0u8; 32];
+        let mut rng = rand::thread_rng();
+
+        const NUM_TESTS: usize = if cfg!(miri) { 3 } else { 111 };
+
+        let mut a_ref = [[[0i16; KYBER_N]; K]; K];
+
+        for _ in 0..NUM_TESTS {
+            rng.fill(&mut seed);
+
+            let a = KyberMatrix::<K>::gen_matrix::<TRANSPOSED>(&seed);
+
+            crystals_cref::kyber::gen_matrix(&mut a_ref, &seed, TRANSPOSED);
+
+            for i in 0..K {
+                for j in 0..K {
+                    for k in 0..KYBER_N {
+                        assert_eq!(
+                            a[i][j][k / 2].0[k % 2],
+                            a_ref[i][j][k],
+                            "i={}, j={}, k={}",
+                            i,
+                            j,
+                            k
+                        );
+                    }
+                }
+            }
+        }
+    }
+}

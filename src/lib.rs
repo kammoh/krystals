@@ -1,4 +1,3 @@
-// #![no_std]
 #![cfg_attr(not(test), no_std)]
 #![deny(unsafe_code)]
 
@@ -9,11 +8,11 @@ extern crate alloc;
 extern crate std;
 
 pub mod field;
-pub(crate) mod indcpa;
 pub mod keccak;
-mod kem;
+pub mod kem;
 pub mod macros;
-pub mod params;
+pub mod params; // FIXME
+pub mod pke;
 pub mod poly;
 pub mod polymat;
 pub mod polyvec;

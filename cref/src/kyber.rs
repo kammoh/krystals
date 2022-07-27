@@ -20,9 +20,9 @@ mod bindings_1024 {
 }
 
 const KYBER_N: usize = bindings_512::KYBER_N as usize;
+const SEEDBYTES: usize = bindings_512::KYBER_SYMBYTES as usize;
 
 pub type CPoly = [i16; KYBER_N];
-
 
 pub fn ntt(poly: &mut CPoly) {
     #[allow(unsafe_code)]
@@ -58,6 +58,40 @@ pub fn polyvec_invntt_tomont<const K: usize>(pv: &mut [CPoly; K]) {
         },
         4 => unsafe {
             bindings_1024::pqcrystals_kyber1024_ref_polyvec_invntt_tomont(pv.as_mut_ptr() as *mut _);
+        },
+        _ => unreachable!(),
+    }
+}
+
+pub fn gen_matrix<const K: usize>(
+    a: &mut [[CPoly; K]; K],
+    seed: &[u8; SEEDBYTES],
+    transposed: bool,
+) {
+    #![allow(unsafe_code)]
+    let transposed = if transposed { 1 } else { 0 };
+    
+    match K {
+        2 => unsafe {
+            bindings_512::pqcrystals_kyber512_ref_gen_matrix(
+                a.as_mut_ptr() as *mut _,
+                seed.as_ptr(),
+                transposed,
+            );
+        },
+        3 => unsafe {
+            bindings_768::pqcrystals_kyber768_ref_gen_matrix(
+                a.as_mut_ptr() as *mut _,
+                seed.as_ptr(),
+                transposed,
+            );
+        },
+        4 => unsafe {
+            bindings_1024::pqcrystals_kyber1024_ref_gen_matrix(
+                a.as_mut_ptr() as *mut _,
+                seed.as_ptr(),
+                transposed,
+            );
         },
         _ => unreachable!(),
     }

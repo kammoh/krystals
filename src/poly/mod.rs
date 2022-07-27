@@ -3,9 +3,14 @@ use core::ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign};
 use core::slice::{Iter, IterMut};
 
 use crate::field::*;
+use crate::keccak::fips202::{CrystalsXof, Shake128, Shake128Params, SqueezeOneBlock};
+use crate::keccak::KeccakParams;
 
 pub mod dilithium;
 pub mod kyber;
+
+// TODO use Parameters
+pub const UNIFORM_SEED_BYTES: usize = 32;
 
 pub trait Polynomial<const N: usize>:
     Index<usize, Output = Self::F>
@@ -27,6 +32,9 @@ pub trait Polynomial<const N: usize>:
     const N: usize = N;
 
     const INV_NTT_SCALE: <Self::F as Field>::E;
+
+    const NUM_SCALARS: usize =
+        Self::N * core::mem::size_of::<Self::F>() / core::mem::size_of::<<Self::F as Field>::E>();
 
     fn zetas(k: usize) -> <Self::F as Field>::E;
 
@@ -149,51 +157,23 @@ pub trait Polynomial<const N: usize>:
 
     fn pointwise(&self, other: &Self, result: &mut Self);
 
-    // fn getnoise_eta1<const K: usize, PRF: Prf>(
-    //     prf: &mut PRF,
-    //     seed: &[u8; KYBER_SYMBYTES],
-    //     nonce: u8,
-    // ) -> Self {
-    //     if K == 2 {
-    //         let mut poly = Self::default();
-    //         // let mut buf = [0u8; 3 * Self::N / 4]; // TODO avoid double initialization?
-    //         // prf.prf(&mut buf, seed, nonce);
-    //         // cbd3(&mut poly.0, &buf);
-    //         poly
-    //     } else {
-    //         Self::getnoise_eta2(prf, seed, nonce)
-    //     }
-    // }
+    fn rej_uniform(&mut self, start: usize, bytes: &[u8; Shake128Params::RATE_BYTES]) -> usize;
 
-    // fn getnoise_eta2<PRF: Prf>(prf: &mut PRF, seed: &[u8; KYBER_SYMBYTES], nonce: u8) -> Self {
-    //     let mut poly = Poly::default();
-    //     // let mut buf = [0u8; Self::N / 2]; // TODO avoid double initialization?
-    //     // let mut buf = [0u8; 256 / 2]; // FIXME
-    //     // prf.prf(&mut buf, seed, nonce);
-    //     // cbd2(&mut poly.0, &mut buf);
-    //     poly
-    // }
+    #[inline]
+    fn uniform(&mut self, seed: &[u8; UNIFORM_SEED_BYTES], i: u8, j: u8) {
+        let mut shake128 = Shake128::default();
 
-    // fn rej_sample(&mut self, buf: &[u8]) -> usize {
-    //     let mut ctr = 0;
-    //     let mut buf = buf;
+        shake128.absorb_xof_with_nonces(seed, i, j);
 
-    //     while ctr < N && buf.len() >= 3 {
-    //         let val0 = ((buf[0] >> 0) as u16 | (buf[1] as u16) << 8) & 0xFFF;
-    //         let val1 = ((buf[1] >> 4) as u16 | (buf[2] as u16) << 4) & 0xFFF;
-    //         buf = &buf[3..];
+        let mut ctr = 0;
 
-    //         if val0 < KYBER_Q as u16 {
-    //             self[ctr] = val0 as i16;
-    //             ctr += 1;
-    //         }
-    //         if ctr < N && val1 < KYBER_Q as u16 {
-    //             self[ctr] = val1 as i16;
-    //             ctr += 1;
-    //         }
-    //     }
-    //     ctr
-    // }
+        while ctr < Self::NUM_SCALARS {
+            let xof_out = shake128.squeezed_block();
+            ctr = self.rej_uniform(ctr, xof_out);
+        }
+
+        debug_assert_eq!(ctr, Self::NUM_SCALARS);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -324,4 +304,5 @@ impl<F: Field, const N: usize> AsMut<[F; N]> for Poly<F, N> {
     }
 }
 
-impl<F: Field, const N: usize> Poly<F, N> {}
+#[cfg(test)]
+mod tests {}

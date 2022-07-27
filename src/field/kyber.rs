@@ -159,15 +159,16 @@ pub const fn fqmul(a: i16, b: i16) -> i16 {
     montgomery_reduce((a as i32) * (b as i32))
 }
 
-mod tests {
-    use crate::params::*;
-    use crate::utils::*;
 
+
+mod tests {
     use super::*;
+
+    const NUM_TESTS: usize = if cfg!(miri) {100} else {1_000_000};
 
     #[test]
     fn test_barrett_reduce() {
-        for _ in 0..1_000_000 {
+        for _ in 0..NUM_TESTS {
             let x: i16 = rand::random();
             let br = barrett_reduce(x);
             assert!(-KYBER_Q / 2 <= br && br <= KYBER_Q / 2);

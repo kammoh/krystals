@@ -19,8 +19,8 @@ mod bindings_5 {
     include!(concat!(env!("OUT_DIR"), "/dilithium5_bindings.rs"));
 }
 
-
 const DILITHIUM_N: usize = bindings_2::N as usize;
+const SEEDBYTES: usize = bindings_2::SEEDBYTES as usize;
 
 pub type CPoly = [i32; DILITHIUM_N];
 
@@ -40,6 +40,17 @@ pub fn inv_ntt(poly: &mut CPoly) {
     }
 }
 
+#[inline(always)]
+pub fn uniform(poly: &mut CPoly, seed: &[u8; SEEDBYTES], nonce: u16) {
+    #[allow(unsafe_code)]
+    unsafe {
+        bindings_2::pqcrystals_dilithium2_ref_poly_uniform(
+            poly.as_mut_ptr() as *mut _,
+            seed as *const _,
+            nonce,
+        );
+    }
+}
 
 #[inline(always)]
 pub fn poly_pointwise_montgomery(r: &mut CPoly, a: &CPoly, b: &CPoly) {
@@ -52,7 +63,6 @@ pub fn poly_pointwise_montgomery(r: &mut CPoly, a: &CPoly, b: &CPoly) {
         );
     }
 }
-
 
 #[inline(always)]
 pub fn polyveck_ntt<const K: usize>(pv: &mut [CPoly; K]) {
@@ -87,4 +97,3 @@ pub fn polyveck_invntt_tomont<const K: usize>(pv: &mut [CPoly; K]) {
         _ => unreachable!(),
     }
 }
-
