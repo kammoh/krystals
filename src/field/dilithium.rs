@@ -6,8 +6,6 @@ pub(crate) const DILITHIUM_Q: i32 = 8_380_417; // ((1<<23) - (1<<13) + 1)
 
 pub(crate) const MONT: i32 = -4186625; // 2^32 % Q
 
-pub(crate) const MONT_SQUARED: i32 = ((MONT as i64).pow(2) % DILITHIUM_Q as i64) as i32; // MONT^2
-
 pub(crate) const QINV: i32 = 58_728_449; // q^(-1) mod 2^32
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -82,12 +80,6 @@ fn caddq(a: i32) -> i32 {
     a + ((a >> 31) & DILITHIUM_Q)
 }
 
-// FIXME
-#[inline(always)]
-fn csubq(a: i32) -> i32 {
-    a
-}
-
 #[inline(always)]
 pub const fn fqmul(a: i32, b: i32) -> i32 {
     montgomery_reduce(a as i64 * b as i64)
@@ -136,14 +128,17 @@ impl Field for DilithiumFq {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
     use rand::Rng;
+    const MONT_SQUARED: i32 = ((MONT as i64).pow(2) % DILITHIUM_Q as i64) as i32; // MONT^2
+    const NUM_TESTS: usize = if cfg!(miri) { 100 } else { 1_000_000 };
 
     #[test]
     fn test_reduce() {
         let mut rng = rand::thread_rng();
-        for _ in 0..1_000_000 {
+        for _ in 0..NUM_TESTS {
             let x: i32 = rng.gen_range(i32::MIN..=i32::MAX - (1 << 22));
             let br = freeze(x);
             assert!(-DILITHIUM_Q <= br && br < DILITHIUM_Q);
@@ -159,7 +154,7 @@ mod tests {
     #[test]
     fn test_fqmul() {
         let mut rng = rand::thread_rng();
-        for _ in 0..1_000_000 {
+        for _ in 0..NUM_TESTS {
             // let x: i32 = rng.gen_range(i32::MIN..i32::MAX);
             let x = rng.gen_range(-DILITHIUM_Q..=DILITHIUM_Q);
             let y = rng.gen_range(-DILITHIUM_Q..=DILITHIUM_Q);

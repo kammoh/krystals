@@ -70,6 +70,8 @@ name = "kyber_gen_matrix"
 harness = false
 
 [features]
+default = []
+std = []
 
 [package.metadata.docs.rs]
 all-features = true

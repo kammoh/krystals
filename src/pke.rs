@@ -7,12 +7,10 @@ use crate::poly::kyber::KYBER_POLYBYTES;
 use crate::poly::Polynomial;
 use crate::polymat::KyberMatrix;
 use crate::polyvec::*;
-use crate::unsafe_utils::*;
 use crate::utils::split::ArraySplitter;
 use crate::CPASecretKey;
 use crate::CipherText;
 use crate::PublicKey;
-use rand::RngCore;
 
 pub fn keypair<const K: usize>(
     entropy: &[u8; KYBER_SYMBYTES], pk: &mut PublicKey<K>, sk: &mut CPASecretKey<K>) {

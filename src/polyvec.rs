@@ -1,9 +1,8 @@
-use core::ops::{AddAssign, Index, IndexMut, Mul};
+use core::ops::{AddAssign, Index, IndexMut};
 
 use rand::{CryptoRng, RngCore};
 
 use crate::{
-    params::*,
     poly::{
         dilithium::DilithiumPoly,
         kyber::{KyberPoly, KYBER_POLYBYTES},

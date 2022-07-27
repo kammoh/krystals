@@ -1,5 +1,4 @@
 use core::{
-    borrow::{Borrow, BorrowMut},
     ops::{BitXorAssign, Index, IndexMut, Range, RangeTo},
 };
 
@@ -494,7 +493,10 @@ pub mod fips202 {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
+
     use rand::RngCore;
+    use std::*;
 
     use super::{fips202::*, *};
 

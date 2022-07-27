@@ -7,10 +7,6 @@ use crate::{
 pub const KYBER_SSBYTES: usize = 32;
 pub const KYBER_SYMBYTES: usize = 32;
 
-// internal
-
-pub(crate) const KYBER_ETA2: usize = 2;
-
 pub trait KyberParams {
     type PV;
     type PolyVecCompressed;

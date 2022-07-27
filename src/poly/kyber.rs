@@ -110,9 +110,9 @@ impl KyberPoly {
 
     pub fn cbd2(&mut self, buf: &[u8; KYBER_N / 2]) {
         const MASK55: u32 = 0x55_55_55_55;
-        const MASK33: u32 = 0x33333333;
-        const MASK03: u32 = 0x03030303;
-        const MASK0F: u32 = 0x0F0F0F0F;
+        // const MASK33: u32 = 0x33333333;
+        // const MASK03: u32 = 0x03030303;
+        // const MASK0F: u32 = 0x0F0F0F0F;
 
         for (r, bytes) in self
             .as_mut()
@@ -121,9 +121,9 @@ impl KyberPoly {
         {
             let t = u32::from_le_bytes(*bytes);
             let d: u32 = (t & MASK55) + ((t >> 1) & MASK55);
-            let e = (d & MASK33) + MASK33 - ((d >> 2) & MASK33);
-            let f0 = (e & MASK0F) - MASK03;
-            let f1 = ((e >> 4) & MASK0F) - MASK03;
+            // let e = (d & MASK33) + MASK33 - ((d >> 2) & MASK33);
+            // let f0 = (e & MASK0F) - MASK03;
+            // let f1 = ((e >> 4) & MASK0F) - MASK03;
             for j in 0..4 {
                 let a = ((d >> (8 * j)) & 0x3) as i16;
                 let b = ((d >> (8 * j + 2)) & 0x3) as i16;
@@ -389,21 +389,11 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_ntt_and_then_invtt_ref() {
-    //     for testcase in 1..1000 {
-    //         let mut poly = Poly::new_random();
-    //         let poly_copy = poly.clone();
-    //         cref::ntt(&mut poly.0);
-    //         cref::invntt(&mut poly.0);
-    //         assert_eq!(poly, poly_copy, "failed testcase #{}", testcase);
-    //     }
-    // }
-
     #[test]
+    #[cfg(not(miri))]
     fn test_ntt_vs_ref() {
         let mut rng = rand::thread_rng();
-        for testcase in 0..3_000 {
+        for _ in 0..3_000 {
             let mut poly = KyberPoly::new_random(&mut rng);
             // println!("poly before ntt: {:?}", poly);
             let mut p = [0i16; { KYBER_N }];
@@ -426,6 +416,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn test_invntt_vs_ref() {
         let mut rng = rand::thread_rng();
         for _ in 0..3_000 {
@@ -441,6 +432,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn pwm_vs_ref() {
         let mut rng = rand::thread_rng();
         for _ in 0..1_000 {

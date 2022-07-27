@@ -82,4 +82,3 @@ pub enum KyberError {
     RngFailure, // was not able to retrieve required random from RNG. Returned by encap and keypair.
 }
 
-pub type SharedSecret = [u8; KYBER_SSBYTES];

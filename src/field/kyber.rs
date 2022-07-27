@@ -6,8 +6,6 @@ pub(crate) const KYBER_Q: i16 = 3_329;
 
 pub(crate) const MONT: i16 = -1044; // 2^16 mod q
 
-pub(crate) const MONT_SQUARED: i16 = ((MONT as i32).pow(2) % KYBER_Q as i32) as i16; // MONT^2
-
 pub(crate) const QINV: i16 = -3327; // q^-1 mod 2^16
 
 // pub type KyberFq = FqEl<i16, { KYBER_Q as usize }>;
@@ -159,12 +157,11 @@ pub const fn fqmul(a: i16, b: i16) -> i16 {
     montgomery_reduce((a as i32) * (b as i32))
 }
 
-
-
+#[cfg(test)]
 mod tests {
     use super::*;
-
-    const NUM_TESTS: usize = if cfg!(miri) {100} else {1_000_000};
+    const MONT_SQUARED: i16 = ((MONT as i32).pow(2) % KYBER_Q as i32) as i16; // MONT^2
+    const NUM_TESTS: usize = if cfg!(miri) { 100 } else { 1_000_000 };
 
     #[test]
     fn test_barrett_reduce() {
@@ -182,7 +179,7 @@ mod tests {
     }
     #[test]
     fn test_fqmul() {
-        for _ in 0..1_000_000 {
+        for _ in 0..NUM_TESTS {
             let x: i16 = rand::random();
             let y = rand::random();
             let z_mont = fqmul(x, y);
