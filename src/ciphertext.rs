@@ -1,7 +1,6 @@
 use crate::lib::marker::PhantomData;
 use crate::poly::kyber::poly_compressed_bytes_for_k;
-use crate::poly::Polynomial;
-use crate::utils::flatten::FlattenSlice;
+use crate::utils::flatten::{FlattenSlice, FlattenSliceMut, FlattenTwice, FlattenTwiceMut};
 use crate::utils::gcd_u8;
 use crate::{
     poly::{
@@ -42,12 +41,12 @@ impl<const D_POLY: usize, const D_PV: usize, const M: usize, const K: usize> Def
 }
 
 pub trait CompressedCiphertex {
-    const D_POLY: usize;
-    const D_PV: usize;
     const M: usize = KYBER_N / 8;
 
     fn poly_bytes(&self) -> &[u8];
     fn polyvec_bytes(&self) -> &[u8];
+    fn poly_bytes_mut(&mut self) -> &mut [u8];
+    fn polyvec_bytes_mut(&mut self) -> &mut [u8];
 }
 
 pub trait CompressCiphertext<const K: usize> {
@@ -179,25 +178,28 @@ fn polycompress_d11(ct: &mut [u8; poly_compressed_bytes(11)], poly: &KyberPoly) 
 }
 
 impl<
-        'a,
         P: PolynomialTrait,
         const D_POLY: usize,
         const D_PV: usize,
         const M: usize,
         const K: usize,
     > CompressedCiphertex for Ciphertext<D_POLY, D_PV, K, M, P>
-where
-    Self: 'a,
 {
-    const D_POLY: usize = D_POLY;
-    const D_PV: usize = D_PV;
     const M: usize = M;
 
     fn poly_bytes(&self) -> &[u8] {
         self.v.flatten_slice()
     }
     fn polyvec_bytes(&self) -> &[u8] {
-        self.b.flatten_slice()
+        self.b.flatten_twice()
+    }
+
+    fn poly_bytes_mut(&mut self) -> &mut [u8] {
+        self.v.flatten_slice_mut()
+    }
+
+    fn polyvec_bytes_mut(&mut self) -> &mut [u8] {
+        self.b.flatten_twice_mut()
     }
 }
 
@@ -273,39 +275,56 @@ impl CompressCiphertext<4> for Ciphertext<5, 11, 4, 32, KyberPoly> {
     }
 }
 
-pub struct SliceCipherText<'a, const K: usize>(pub &'a mut [u8]);
+#[cfg(any(feature = "std", feature = "alloc", test))]
+pub struct VecCipherText<const K: usize>(crate::lib::Vec<u8>);
 
-impl<'a> CompressedCiphertex for SliceCipherText<'a, 2> {
-    const D_POLY: usize = 4;
-    const D_PV: usize = 10;
-
-    const M: usize = KYBER_N / 8;
-
-    fn poly_bytes(&self) -> &[u8] {
-        todo!()
-    }
-
-    fn polyvec_bytes(&self) -> &[u8] {
-        todo!()
+#[cfg(any(feature = "std", feature = "alloc", test))]
+impl<const K: usize> Default for VecCipherText<K> {
+    fn default() -> Self {
+        VecCipherText(crate::lib::from_elem(
+            0,
+            polyvec_compressed_bytes_for_k::<K>() + poly_compressed_bytes_for_k::<K>(),
+        ))
     }
 }
 
-impl<'a> CompressedCiphertex for SliceCipherText<'a, 4> {
-    const D_POLY: usize = 5;
-    const D_PV: usize = 11;
-
-    const M: usize = KYBER_N / 8;
-
-    fn poly_bytes(&self) -> &[u8] {
-        todo!()
-    }
-
-    fn polyvec_bytes(&self) -> &[u8] {
-        todo!()
+#[cfg(any(feature = "std", feature = "alloc", test))]
+impl<const K: usize> AsRef<[u8]> for VecCipherText<K> {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 
-impl<'a, const K: usize> CompressCiphertext<K> for SliceCipherText<'a, K> {
+#[cfg(any(feature = "std", feature = "alloc", test))]
+impl<const K: usize> AsMut<[u8]> for VecCipherText<K> {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.0
+    }
+}
+
+#[cfg(any(feature = "std", feature = "alloc", test))]
+impl<const K: usize> CompressedCiphertex for VecCipherText<K> {
+    const M: usize = KYBER_N / 8;
+
+    fn poly_bytes(&self) -> &[u8] {
+        &self.0[polyvec_compressed_bytes_for_k::<K>()..]
+    }
+
+    fn polyvec_bytes(&self) -> &[u8] {
+        &self.0[..polyvec_compressed_bytes_for_k::<K>()]
+    }
+
+    fn poly_bytes_mut(&mut self) -> &mut [u8] {
+        &mut self.0[polyvec_compressed_bytes_for_k::<K>()..]
+    }
+
+    fn polyvec_bytes_mut(&mut self) -> &mut [u8] {
+        &mut self.0[..polyvec_compressed_bytes_for_k::<K>()]
+    }
+}
+
+#[cfg(any(feature = "std", feature = "alloc", test))]
+impl<const K: usize> CompressCiphertext<K> for VecCipherText<K> {
     fn compress_poly(&mut self, v: &KyberPoly) {
         let ct = &mut self.0[polyvec_compressed_bytes_for_k::<K>()..];
         assert_eq!(ct.len(), poly_compressed_bytes_for_k::<K>());
@@ -363,10 +382,7 @@ impl<'a, const K: usize> CompressCiphertext<K> for SliceCipherText<'a, K> {
         let pvct = &self.0[..polyvec_compressed_bytes_for_k::<K>()];
         assert_eq!(pvct.len(), polyvec_compressed_bytes_for_k::<K>());
         let ct_per_poly_len = pvct.len() / K;
-        for (poly, bytes) in b
-            .into_iter()
-            .zip(pvct.chunks_exact(ct_per_poly_len))
-        {
+        for (poly, bytes) in b.into_iter().zip(pvct.chunks_exact(ct_per_poly_len)) {
             match K {
                 2 | 3 => {
                     poly.decompress_slice::<10>(bytes);

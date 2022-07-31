@@ -55,10 +55,10 @@ impl Sub for DilithiumFq {
 ///  computes `a mod Q` in `[-6_283_009, 6_283_007]` (inclusive range)
 #[inline(always)]
 fn reduce32(a: i32) -> i32 {
-    debug_assert!(a < ((1u64 << 31) - (1 << 22)) as i32);
+    debug_assert!(a <= i32::MAX - (1 << 22));
     let t = (a + (1 << 22)) >> 23;
     let r = a - t.wrapping_mul(DILITHIUM_Q);
-    debug_assert!(-6_283_009 <= r && r <= 6_283_007);
+    debug_assert!(-6_283_009 <= r && r <= 6_283_008, "a={a} r={r}");
     r
 }
 
@@ -136,9 +136,11 @@ mod tests {
     const MONT_SQUARED: i32 = ((MONT as i64).pow(2) % DILITHIUM_Q as i64) as i32; // MONT^2
     const NUM_TESTS: usize = if cfg!(miri) { 100 } else { 1_000_000 };
 
+
     #[test]
     fn test_reduce() {
         let mut rng = rand::thread_rng();
+
         for _ in 0..NUM_TESTS {
             let x: i32 = rng.gen_range(i32::MIN..=i32::MAX - (1 << 22));
             let br = freeze(x);

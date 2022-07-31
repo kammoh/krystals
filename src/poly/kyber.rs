@@ -533,7 +533,9 @@ mod tests {
     extern crate std;
     use super::*;
     use crate::poly::Polynomial;
-    use crate::utils::unsafe_utils::flatten::{FlattenArray, FlattenSlice, FlattenSliceMut};
+    use crate::utils::unsafe_utils::flatten::{
+        FlattenArray, FlattenSlice, FlattenSliceMut, FlattenTwice, FlattenTwiceMut,
+    };
     use crystals_cref::kyber as cref;
     use std::*;
 
@@ -736,12 +738,10 @@ mod tests {
             let mut ct = [[[0u8; D]; M]; K];
 
             for _ in 0..1_000 {
-                for ct_i in ct.flatten_slice_mut() {
-                    rng.fill_bytes(ct_i);
-                }
+                rng.fill_bytes(ct.flatten_twice_mut());
 
                 pv.decompress::<D>(&mut ct);
-                cref::polyvec_decompress::<K>(&mut pv_ref, ct.flatten_slice());
+                cref::polyvec_decompress::<K>(&mut pv_ref, ct.flatten_twice());
                 for (p, p_ref) in pv.into_iter().zip(pv_ref) {
                     assert_eq!(p.as_scalar_array(), &p_ref);
                 }

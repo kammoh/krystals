@@ -74,6 +74,14 @@ pub trait FlattenSliceMut<'a, T, const L: usize> {
     fn flatten_slice_mut(&'a mut self) -> &'a mut [T];
 }
 
+pub trait FlattenTwice<T, const L: usize> {
+    fn flatten_twice(&self) -> &[T];
+}
+
+pub trait FlattenTwiceMut<T, const L: usize> {
+    fn flatten_twice_mut(&mut self) -> &mut [T];
+}
+
 impl<'a, T: 'a, const L: usize> FlattenSlice<'a, T, L> for &'a [[T; L]] {
     fn flatten_slice(&'a self) -> &'a [T] {
         // Safety: self is a slice of arrays each L elements (of type T), self.len() * L elements in total
@@ -96,10 +104,22 @@ impl<'a, T: 'a, const L: usize, const M: usize> FlattenSlice<'a, T, L> for [[T; 
     }
 }
 
-impl<'a, T: 'a, const L: usize, const M: usize, const X: usize> FlattenSlice<'a, T, L> for [[[T; L]; M]; X] {
-    fn flatten_slice(&'a self) -> &'a [T] {
+impl<'a, T: 'a + Sized, const L: usize, const M: usize> FlattenSliceMut<'a, T, L> for [[T; L]; M] {
+    fn flatten_slice_mut(&'a mut self) -> &'a mut [T] {
         // Safety: self is a slice of arrays each L elements (of type T), M * L elements in total
         // generated slice is the exact same length (M * L) and same type (T) as the original slice.
+        #[allow(unsafe_code)]
+        unsafe {
+            core::slice::from_raw_parts_mut(self.as_mut_ptr() as *mut _, M * L)
+        }
+    }
+}
+
+impl<T: Sized, const L: usize, const M: usize, const X: usize> FlattenTwice<T, L>
+    for [[[T; L]; M]; X]
+{
+    fn flatten_twice(&self) -> &[T] {
+        // Safety: Number of total elements and total size remains unchanged (X * M * L)
         #[allow(unsafe_code)]
         unsafe {
             core::slice::from_raw_parts(self.as_ptr() as *const _, X * M * L)
@@ -107,15 +127,14 @@ impl<'a, T: 'a, const L: usize, const M: usize, const X: usize> FlattenSlice<'a,
     }
 }
 
-
-
-impl<'a, T: 'a, const L: usize, const M: usize> FlattenSliceMut<'a, T, L> for [[T; L]; M] {
-    fn flatten_slice_mut(&'a mut self) -> &'a mut [T] {
-        // Safety: self is a slice of arrays each L elements (of type T), M * L elements in total
-        // generated slice is the exact same length (M * L) and same type (T) as the original slice.
+impl<T: Sized, const L: usize, const M: usize, const X: usize> FlattenTwiceMut<T, L>
+    for [[[T; L]; M]; X]
+{
+    fn flatten_twice_mut(&mut self) -> &mut [T] {
+        // Safety: Number of total elements and total size remains unchanged (X * M * L)
         #[allow(unsafe_code)]
         unsafe {
-            core::slice::from_raw_parts_mut(self.as_mut_ptr() as *mut _, M * L)
+            core::slice::from_raw_parts_mut(self.as_mut_ptr() as *mut _, X * M * L)
         }
     }
 }

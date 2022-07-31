@@ -1,7 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(unsafe_code)]
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
+#[macro_use]
 extern crate std;
 
 #[cfg(feature = "alloc")]
@@ -39,9 +40,12 @@ mod lib {
     pub use alloc::borrow::{Cow, ToOwned};
     #[cfg(feature = "std")]
     pub use std::borrow::{Cow, ToOwned};
-}
 
-////////////////////////////////////////////////////////////////////////////////
+    #[cfg(all(feature = "alloc", not(feature = "std"), not(test)))]
+    pub use alloc::vec::{Vec, from_elem};
+    #[cfg(any(feature = "std", test))]
+    pub use std::vec::{Vec, from_elem};
+}
 
 #[macro_use]
 mod macros;

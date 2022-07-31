@@ -192,14 +192,17 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn keypair_vs_ref_2() {
         test_keypair_vs_ref::<2>();
     }
     #[test]
+    #[cfg(not(miri))]
     fn keypair_vs_ref_3() {
         test_keypair_vs_ref::<3>();
     }
     #[test]
+    #[cfg(not(miri))]
     fn keypair_vs_ref_4() {
         test_keypair_vs_ref::<4>();
     }
@@ -277,14 +280,17 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn encrypt_vs_ref_2() {
         test_encrypt_vs_ref::<2>();
     }
     #[test]
+    #[cfg(not(miri))]
     fn encrypt_vs_ref_3() {
         test_encrypt_vs_ref::<3>();
     }
     #[test]
+    #[cfg(not(miri))]
     fn encrypt_vs_ref_4() {
         test_encrypt_vs_ref::<4>();
     }
@@ -300,31 +306,48 @@ mod tests {
 
         let mut msg = [0u8; MSG_BYTES];
         let mut msg_ref = [0u8; MSG_BYTES];
-
-        let mut ct_vec =
-            vec![0; poly_compressed_bytes_for_k::<K>() + polyvec_compressed_bytes_for_k::<K>()];
-
-        let ct = SliceCipherText::<K>(&mut ct_vec);
+        let mut ct = VecCipherText::<K>::default();
 
         for _test in 0..4_000 / K {
-            rng.fill_bytes(&mut ct.0.as_mut());
+            rng.fill_bytes(ct.as_mut());
 
-            cref::indcpa_dec::<K>(&mut msg_ref, &ct.0, &sk.bytes());
+            cref::indcpa_dec::<K>(&mut msg_ref, ct.as_ref(), &sk.bytes());
             decrypt(&ct, &sk, &mut msg);
             assert_eq!(msg, msg_ref);
         }
     }
 
     #[test]
+    #[cfg(not(miri))]
     fn decrypt_vs_ref_2() {
         test_decrypt_vs_ref::<2>();
     }
     #[test]
+    #[cfg(not(miri))]
     fn decrypt_vs_ref_3() {
         test_decrypt_vs_ref::<3>();
     }
     #[test]
+    #[cfg(not(miri))]
     fn decrypt_vs_ref_4() {
         test_decrypt_vs_ref::<4>();
+    }
+
+    fn test_encrypt_then_decrypt_valid_keys<const K: usize>() {
+        let mut rng = rand::thread_rng();
+
+        let mut entropy = [0u8; NOISE_SEED_BYTES];
+        rng.fill(entropy.as_mut());
+        let mut sk = CPASecretKey::<K>::default();
+        let mut pk = PublicKey::<K>::default();
+        keypair(&entropy, &mut sk, &mut pk);
+
+        let mut msg = [0u8; MSG_BYTES];
+        rng.fill(msg.as_mut());
+        let mut coins = [0u8; NOISE_SEED_BYTES];
+        rng.fill(coins.as_mut());
+        let mut ct = VecCipherText::<K>::default();
+
+        encrypt(&msg, &pk, &coins, &mut ct);
     }
 }
