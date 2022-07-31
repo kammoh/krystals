@@ -44,7 +44,7 @@ impl KeccakState for Keccak1600 {
     }
 }
 
-impl<'a, T, P: KeccakParams> KeccakOps<P> for T
+impl<T, P: KeccakParams> KeccakOps<P> for T
 where
     T: KeccakState<Lane = u64>,
 {

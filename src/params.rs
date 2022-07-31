@@ -3,10 +3,6 @@ use crate::{
     polyvec::PolyVec,
 };
 
-// API?
-pub const KYBER_SSBYTES: usize = 32;
-pub const KYBER_SYMBYTES: usize = 32;
-
 pub trait KyberParams {
     type PV;
     type PolyVecCompressed;

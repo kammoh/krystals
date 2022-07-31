@@ -6,6 +6,11 @@ edition = "2021"
 
 [dependencies]
 cty = "0.2.2"
+ringbuffer = { version = "0.8.4", default-features = false }
+
+[features]
+default = ["std"]
+std = []
 
 [dev-dependencies]
 

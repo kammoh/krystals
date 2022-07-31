@@ -6,6 +6,8 @@ pub(crate) const KYBER_Q: i16 = 3_329;
 
 pub(crate) const MONT: i16 = -1044; // 2^16 mod q
 
+pub(crate) const MONT_SQUARED: i16 = ((MONT as i32).pow(2) % KYBER_Q as i32) as i16; // MONT^2
+
 pub(crate) const QINV: i16 = -3327; // q^-1 mod 2^16
 
 // pub type KyberFq = FqEl<i16, { KYBER_Q as usize }>;
@@ -102,6 +104,11 @@ impl KyberFq {
         r.0[0] += fqmul(zeta, z1) + z0;
         r.0[1] += fqmul(a1 + a0, b1 + b0) - z1 - z0;
     }
+
+    #[inline(always)]
+    pub fn to_mont(&mut self) {
+        *self *= MONT_SQUARED;
+    }
 }
 
 const V: i16 = (((1 << 26) + (KYBER_Q / 2) as i32) / KYBER_Q as i32) as i16;
@@ -160,7 +167,6 @@ pub const fn fqmul(a: i16, b: i16) -> i16 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const MONT_SQUARED: i16 = ((MONT as i32).pow(2) % KYBER_Q as i32) as i16; // MONT^2
     const NUM_TESTS: usize = if cfg!(miri) { 100 } else { 1_000_000 };
 
     #[test]

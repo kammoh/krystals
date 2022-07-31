@@ -6,7 +6,7 @@ use crate::{
     keccak::{fips202::Shake128Params, KeccakParams},
 };
 
-use super::{Poly, Polynomial};
+use super::{Poly, Polynomial, PolynomialTrait};
 
 pub(crate) const DILITHIUM_N: usize = 256;
 
@@ -29,9 +29,11 @@ const ZETAS: [i32; DILITHIUM_N - 1] = {
     zetas
 };
 
-impl Polynomial<DILITHIUM_N> for DilithiumPoly {
+impl PolynomialTrait for DilithiumPoly {
     type F = DilithiumFq;
+}
 
+impl Polynomial<DILITHIUM_N> for DilithiumPoly {
     const INV_NTT_SCALE: <Self::F as Field>::E = 41_978;
 
     #[inline(always)]
@@ -66,7 +68,7 @@ impl Polynomial<DILITHIUM_N> for DilithiumPoly {
 
         let mut piter = self.0[ctr..].as_mut().iter_mut();
 
-        debug_assert!(Shake128Params::RATE_BYTES % 3 == 0);
+        const_assert_eq!(Shake128Params::RATE_BYTES % 3, 0);
 
         for buf in bytes.chunks_exact(3) {
             // let t = (buf[0] as u32 | ((buf[1] as u32) << 8) | ((buf[2] as u32) << 16))
@@ -84,6 +86,17 @@ impl Polynomial<DILITHIUM_N> for DilithiumPoly {
         }
         ctr
     }
+
+    fn pointwise_acc(&self, other: &Self, result: &mut Self) {
+        for ((a, b), r) in self
+            .as_ref()
+            .iter()
+            .zip(other.as_ref().iter())
+            .zip(result.as_mut().iter_mut())
+        {
+            r.0 += fqmul(a.0, b.0);
+        }
+    }
 }
 
 // #[cfg(test)]
@@ -99,7 +112,7 @@ impl DilithiumPoly {
         poly
     }
 
-    pub fn into_array(&self) -> [<<Self as Polynomial<{ Self::N }>>::F as Field>::E; Self::N] {
+    pub fn into_array(&self) -> [<<Self as PolynomialTrait>::F as Field>::E; Self::N] {
         // array_init::array_init(|i: usize| self[i].0)
         self.0.map(|x| x.0)
     }

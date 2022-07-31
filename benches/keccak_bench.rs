@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use crystals::keccak::fips202::Digest;
-use digest::generic_array::GenericArray;
 use rand::Rng;
+use sha3::digest::generic_array::GenericArray;
 
 fn keccak_sha3_256<const N: usize>(c: &mut Criterion) {
     let mut group = c.benchmark_group(format!("SHA3-256 {N}B"));

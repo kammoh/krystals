@@ -20,14 +20,6 @@ where
     }
 }
 
-// impl<T: Field, const N: usize, const K: usize> Mul<PolyVec<T, N, K>> for PolyMat<T, N, K> {
-//     type Output = PolyVec<T, N, K>;
-
-//     fn mul(self, rhs: PolyVec<T, N, K>) -> Self::Output {
-//         self.mult_vec(&rhs)
-//     }
-// }
-
 impl<P, const N: usize, const K: usize, const L: usize> Index<usize> for PolyMat<P, N, K, L>
 where
     P: Polynomial<N>,
@@ -35,7 +27,7 @@ where
     type Output = PolyVec<P, N, L>;
 
     #[inline(always)]
-    fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
+    fn index(&self, i: usize) -> &Self::Output {
         &self.0[i]
     }
 }
@@ -45,7 +37,7 @@ where
     P: Polynomial<N>,
 {
     #[inline(always)]
-    fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
+    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
         &mut self.0[i]
     }
 }
@@ -111,7 +103,7 @@ where
     #[inline]
     pub fn gen_matrix_into<const TRANSPOSED: bool>(&mut self, seed: &[u8; UNIFORM_SEED_BYTES]) {
         for (i, vec) in self.as_mut().iter_mut().enumerate() {
-            vec.uniform::<TRANSPOSED>(seed, i as u8);
+            vec.uniform_xof::<TRANSPOSED>(seed, i as u8);
         }
     }
 }

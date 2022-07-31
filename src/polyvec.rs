@@ -3,51 +3,73 @@ use core::ops::{AddAssign, Index, IndexMut};
 use rand::{CryptoRng, RngCore};
 
 use crate::{
+    keccak::fips202::{CrystalsPrf, SpongeOps},
     poly::{
         dilithium::DilithiumPoly,
-        kyber::{KyberPoly, KYBER_POLYBYTES},
-        UNIFORM_SEED_BYTES,
+        kyber::{KyberPoly, Prf, KYBER_N, NOISE_SEED_BYTES, POLYBYTES},
+        PolynomialTrait, UNIFORM_SEED_BYTES,
     },
 };
 
 use super::poly::Polynomial;
 
+pub trait PolynomialVector: Default + Sized + Index<usize> + IndexMut<usize> {
+    type Poly: PolynomialTrait;
+    const K: usize;
+
+    fn ntt(&mut self);
+    fn ntt_and_reduce(&mut self);
+    fn inv_ntt_tomont(&mut self);
+
+    fn reduce(&mut self);
+    fn uniform_xof<const TRANSPOSED: bool>(&mut self, seed: &[u8; UNIFORM_SEED_BYTES], i: u8);
+
+    fn basemul_acc(&self, other: &Self, result: &mut <Self as PolynomialVector>::Poly);
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct PolyVec<P, const N: usize, const K: usize>([P; K])
 where
-    P: Polynomial<N>;
+    P: PolynomialTrait;
 
 impl<P, const N: usize, const K: usize> Default for PolyVec<P, N, K>
 where
-    P: Polynomial<N>,
+    P: PolynomialTrait,
 {
     fn default() -> Self {
         PolyVec([P::default(); K])
     }
 }
 
+// impl<P, const K: usize> PolynomialVector<K> for PolyVec<P, K>
+// where
+//     P: PolynomialTrait,
+// {
+//     type Poly = P;
+// }
+
 impl<P, const N: usize, const K: usize> Index<usize> for PolyVec<P, N, K>
 where
-    P: Polynomial<N>,
+    P: PolynomialTrait,
 {
     type Output = P;
-    fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
+    fn index(&self, i: usize) -> &Self::Output {
         &self.0[i]
     }
 }
 
 impl<P, const N: usize, const K: usize> IndexMut<usize> for PolyVec<P, N, K>
 where
-    P: Polynomial<N>,
+    P: PolynomialTrait,
 {
-    fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
+    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
         &mut self.0[i]
     }
 }
 
 impl<P, const N: usize, const K: usize> AsRef<[P; K]> for PolyVec<P, N, K>
 where
-    P: Polynomial<N>,
+    P: PolynomialTrait,
 {
     #[inline(always)]
     fn as_ref(&self) -> &[P; K] {
@@ -57,7 +79,7 @@ where
 
 impl<P, const N: usize, const K: usize> AsMut<[P; K]> for PolyVec<P, N, K>
 where
-    P: Polynomial<N>,
+    P: PolynomialTrait,
 {
     #[inline(always)]
     fn as_mut(&mut self) -> &mut [P; K] {
@@ -65,37 +87,44 @@ where
     }
 }
 
-impl<P, const N: usize, const K: usize> PolyVec<P, N, K>
+impl<P, const N: usize, const K: usize> PolynomialVector for PolyVec<P, N, K>
 where
     P: Polynomial<N>,
 {
-    pub fn ntt(&mut self) {
-        for poly in self.0.iter_mut() {
+    const K: usize = K;
+    type Poly = P;
+
+    #[inline]
+    fn ntt(&mut self) {
+        for poly in self {
             poly.ntt();
         }
     }
 
-    pub fn ntt_and_reduce(&mut self) {
-        for poly in self.0.iter_mut() {
+    #[inline]
+    fn ntt_and_reduce(&mut self) {
+        for poly in self {
             poly.ntt();
-            poly.reduce();
-        }
-    }
-
-    pub fn invntt_tomont(&mut self) {
-        for poly in self.0.iter_mut() {
-            poly.inv_ntt();
-        }
-    }
-
-    pub fn reduce(&mut self) {
-        for poly in self.0.iter_mut() {
             poly.reduce();
         }
     }
 
     #[inline]
-    pub fn uniform<const TRANSPOSED: bool>(&mut self, seed: &[u8; UNIFORM_SEED_BYTES], i: u8) {
+    fn inv_ntt_tomont(&mut self) {
+        for poly in self {
+            poly.inv_ntt();
+        }
+    }
+
+    #[inline]
+    fn reduce(&mut self) {
+        for poly in self {
+            poly.reduce();
+        }
+    }
+
+    #[inline]
+    fn uniform_xof<const TRANSPOSED: bool>(&mut self, seed: &[u8; UNIFORM_SEED_BYTES], i: u8) {
         for (j, poly) in self.as_mut().iter_mut().enumerate() {
             if TRANSPOSED {
                 poly.uniform(seed, i, j as u8);
@@ -105,96 +134,13 @@ where
         }
     }
 
-    //     pub fn add_assign(&mut self, other: &Self) {
-    //         for i in 0..K {
-    //             self[i].add_assign(&other[i]);
-    //         }
-    //     }
-
-    //     pub fn reduce(&mut self) {
-    //         for i in 0..K {
-    //             self[i].reduce();
-    //         }
-    //     }
-
-    //     #[inline]
-    //     fn compress_2_or_3(self, r: &mut [u8]) {
-    //         const RATIO: usize = 10;
-    //         const GCD: usize = 2;
-    //         const RATIO_1: usize = RATIO / GCD;
-    //         const N: usize = 8 / GCD;
-    //         let mut idx = 0;
-    //         for i in 0..K {
-    //             for j in 0..KYBER_N / N {
-    //                 let mut t = [0u16; N];
-    //                 for k in 0..N {
-    //                     let mut tmp = self[i][4 * j + k];
-    //                     let is_negative = (tmp as i16) >> 15;
-    //                     tmp += is_negative & KYBER_Q as i16; // if tmp < 0 then tmp += Q (in constant time)
-    //                     t[k] = (((((tmp as u32) << RATIO) + (KYBER_Q / 2) as u32) / KYBER_Q as u32)
-    //                         & 0x3ff) as u16;
-    //                 }
-    //                 r[idx + 0] = (t[0] >> 0) as u8;
-    //                 r[idx + 1] = ((t[0] >> 8) | (t[1] << 2)) as u8;
-    //                 r[idx + 2] = ((t[1] >> 6) | (t[2] << 4)) as u8;
-    //                 r[idx + 3] = ((t[2] >> 4) | (t[3] << 6)) as u8;
-    //                 r[idx + 4] = (t[3] >> 2) as u8;
-    //                 idx += RATIO_1;
-    //             }
-    //         }
-    //     }
-
-    //     #[inline]
-    //     fn compress_4(self, r: &mut [u8]) {
-    //         let mut idx = 0;
-    //         const RATIO: usize = 11;
-    //         for i in 0..K {
-    //             for j in 0..KYBER_N / 8 {
-    //                 let mut t = [0u16; 8];
-    //                 for k in 0..8 {
-    //                     let mut tmp = self[i][8 * j + k];
-    //                     let is_negative = (tmp as i16) >> 15;
-    //                     tmp += is_negative & KYBER_Q as i16; // if tmp < 0 then tmp += Q (in constant time)
-    //                     t[k] = (((((tmp as u32) << RATIO) + (KYBER_Q / 2) as u32) / KYBER_Q as u32)
-    //                         & 0x7ff) as u16;
-    //                 }
-    //                 // pack 8 x 11 bit values to 11 bytes
-    //                 r[idx + 0] = (t[0] >> 0) as u8;
-    //                 r[idx + 1] = ((t[0] >> 8) | (t[1] << 3)) as u8;
-    //                 r[idx + 2] = ((t[1] >> 5) | (t[2] << 6)) as u8;
-    //                 r[idx + 3] = (t[2] >> 2) as u8;
-    //                 r[idx + 4] = ((t[2] >> 10) | (t[3] << 1)) as u8;
-    //                 r[idx + 5] = ((t[3] >> 7) | (t[4] << 4)) as u8;
-    //                 r[idx + 6] = ((t[4] >> 4) | (t[5] << 7)) as u8;
-    //                 r[idx + 7] = (t[5] >> 1) as u8;
-    //                 r[idx + 8] = ((t[5] >> 9) | (t[6] << 2)) as u8;
-    //                 r[idx + 9] = ((t[6] >> 6) | (t[7] << 5)) as u8;
-    //                 r[idx + 10] = (t[7] >> 3) as u8;
-    //                 idx += RATIO;
-    //             }
-    //         }
-    //     }
-
-    //     pub fn compress_to(self, r: &mut [u8]) {
-    //         match K {
-    //             2 | 3 => self.compress_2_or_3(r),
-    //             _ => self.compress_4(r),
-    //         }
-    //     }
-
-    //     #[inline(always)]
-    //     pub fn basemul_acc(&self, other: &Self, r: &mut Poly<T, N>) {
-    //         // TODO: optimize
-    //         let mut tmp = Poly::default();
-    //         self[0].basemul_montgomery(&other[0], r);
-
-    //         for i in 1..K {
-    //             self[i].basemul_montgomery(&other[i], &mut tmp);
-    //             *r += &tmp;
-    //         }
-
-    //         r.reduce();
-    //     }
+    fn basemul_acc(&self, other: &Self, result: &mut <Self as PolynomialVector>::Poly) {
+        // // TODO: optimize
+        for (left, right) in self.into_iter().zip(other) {
+            left.pointwise_acc(right, result);
+        }
+        result.reduce();
+    }
 
     //     #[inline(always)]
     //     pub fn to_mont(&mut self) {
@@ -204,9 +150,35 @@ where
     //     }
 }
 
+impl<'a, const N: usize, P, const K: usize> IntoIterator for &'a mut PolyVec<P, N, K>
+where
+    P: PolynomialTrait,
+{
+    type Item = &'a mut P;
+
+    type IntoIter = core::slice::IterMut<'a, P>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        (*self).as_mut().iter_mut()
+    }
+}
+
+impl<'a, P, const N: usize, const K: usize> IntoIterator for &'a PolyVec<P, N, K>
+where
+    P: PolynomialTrait,
+{
+    type Item = &'a P;
+
+    type IntoIter = core::slice::Iter<'a, P>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        (*self).as_ref().iter()
+    }
+}
+
 impl<P, const N: usize, const K: usize> AddAssign<&Self> for PolyVec<P, N, K>
 where
-    P: Polynomial<N>,
+    P: PolynomialTrait,
 {
     fn add_assign(&mut self, rhs: &Self) {
         for i in 0..K {
@@ -215,79 +187,20 @@ where
     }
 }
 
-// impl<P, const N: usize, const K: usize> Mul<&Self> for PolyVec<P, N, K> {
-//     type Output = Poly<T, N>;
-
-//     #[inline(always)]
-//     fn mul(self, other: &Self) -> Self::Output {
-//         let mut r = Poly::default();
-//         self.basemul_acc(other, &mut r);
-//         r
-//     }
-// }
-
-// impl PolyVec<2> {
-//     // pub fn compress_to(self, r: &mut [u8]) {
-//     //     self.compress_2_or_3(r)
-//     // }
-// }
-// impl PolyVec<3> {
-//     // pub fn compress_to(self, r: &mut [u8]) {
-//     //     self.compress_2_or_3(r)
-//     // }
-// }
-
-// impl PolyVec<4> {
-//     // pub fn compress_to(self, r: &mut [u8]) {
-//     //     self.compress_4(r)
-//     // }
-// }
-
-// impl PolyVec<2> {
-//     const fn K() -> usize {2}
-//     pub fn to_bytes(&self) -> [u8;Self::K() * KYBER_POLYBYTES] {
-//         let mut r = [0u8;Self::K() * KYBER_POLYBYTES];
-//         for i in 0..self.vec.len() {
-//             poly_tobytes(&mut r[i*KYBER_POLYBYTES..], self[i]);
-//         }
-//         r
-//     }
-// }
-
-// impl PolyVec<3> {
-//     const fn K() -> usize {3}
-//     pub fn to_bytes(&self) -> [u8;self.vec.len() * KYBER_POLYBYTES] {
-//         let mut r = [0u8;Self::K() * KYBER_POLYBYTES];
-//         for i in 0..self.vec.len() {
-//             poly_tobytes(&mut r[i*KYBER_POLYBYTES..], self[i]);
-//         }
-//         r
-//     }
-// }
-
-// impl PolyVec<4> {
-//     const fn K() -> usize {3}
-//     pub fn to_bytes(&self) -> [u8;Self::K() * KYBER_POLYBYTES] {
-//         let mut r = [0u8;Self::K() * KYBER_POLYBYTES];
-//         for i in 0..self.vec.len() {
-//             poly_tobytes(&mut r[i*KYBER_POLYBYTES..], self[i]);
-//         }
-//         r
-//     }
-// }
-
-impl<const K: usize> PolyVec<KyberPoly, { KyberPoly::N }, K> {
-    pub fn from_bytes(bytes: &[[u8; KYBER_POLYBYTES]; K]) -> Self {
-        let mut pv = PolyVec::<KyberPoly, { KyberPoly::N }, K>::default();
-        for i in 0..K {
-            pv[i].from_bytes(&bytes[i]);
+impl<const N: usize, const K: usize> PolyVec<KyberPoly, N, K> {
+    #[inline(always)]
+    pub fn from_bytes(bytes: &[[u8; POLYBYTES]; K]) -> Self {
+        let mut pv = PolyVec::<KyberPoly, N, K>::default();
+        for (poly, b) in (&mut pv).into_iter().zip(bytes) {
+            poly.from_bytes(b);
         }
         pv
     }
 
-    pub fn to_bytes(&self, r: &mut [[u8; KYBER_POLYBYTES]; K]) {
-        for i in 0..K {
-            self[i].to_bytes(&mut r[i]);
+    #[inline(always)]
+    pub fn into_bytes(&self, r: &mut [[u8; POLYBYTES]; K]) {
+        for (poly, bytes) in self.into_iter().zip(r) {
+            poly.to_bytes(bytes);
         }
     }
 }
@@ -301,6 +214,47 @@ impl<const K: usize> KyberPolyVec<K> {
             pv[i] = KyberPoly::new_random(rng);
         }
         pv
+    }
+
+    #[inline]
+    pub fn getnoise_eta1(&mut self, prf: &mut Prf, seed: &[u8; NOISE_SEED_BYTES], nonce: u8) {
+        if K == 2 {
+            const ETA1: usize = 3;
+            let mut buf = [0u8; ETA1 * KYBER_N / 4];
+            for (i, poly) in self.as_mut().iter_mut().enumerate() {
+                prf.absorb_prf(seed, i as u8 + nonce);
+                prf.squeeze(&mut buf);
+                poly.cbd3(&buf);
+            }
+        } else {
+            self.getnoise_eta2(prf, seed, nonce);
+        }
+    }
+
+    #[inline]
+    pub fn getnoise_eta2(&mut self, prf: &mut Prf, seed: &[u8; NOISE_SEED_BYTES], nonce: u8) {
+        const ETA2: usize = 2;
+        prf.absorb_prf(seed, nonce);
+        let mut buf = [0u8; ETA2 * KYBER_N / 4];
+        for (i, poly) in self.as_mut().iter_mut().enumerate() {
+            prf.absorb_prf(seed, i as u8 + nonce);
+            prf.squeeze(&mut buf);
+            poly.cbd2(&buf);
+        }
+    }
+
+    #[inline] // more possibilities for code with constant d to be optimized?
+    pub fn compress<const D: usize>(&self, ct: &mut [[[u8; D]; 32]; K]) {
+        for (poly, a) in self.into_iter().zip(ct.iter_mut()) {
+            poly.compress(a);
+        }
+    }
+
+    #[inline]
+    pub fn decompress<const D: usize>(&mut self, ct: &[[[u8; D]; 32]; K]) {
+        for (poly, a) in self.into_iter().zip(ct.iter()) {
+            poly.decompress(a);
+        }
     }
 }
 

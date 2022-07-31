@@ -5,7 +5,7 @@ use criterion::{
 };
 use rand::Rng;
 
-use crystals::polyvec::DilithiumPolyVec;
+use crystals::polyvec::{DilithiumPolyVec, PolynomialVector};
 use crystals_cref::dilithium as cref;
 
 fn dilithium_ntt_bench_gen<M: Measurement, const K: usize>(group: &mut BenchmarkGroup<M>) {
@@ -34,7 +34,7 @@ fn dilithium_invntt_bench_gen<M: Measurement, const K: usize>(group: &mut Benchm
     let k_size_str = format!("K={}", K);
 
     group.bench_function(BenchmarkId::new("Rust", &k_size_str), |b| {
-        b.iter(|| DilithiumPolyVec::<K>::invntt_tomont(black_box(&mut pv)))
+        b.iter(|| DilithiumPolyVec::<K>::inv_ntt_tomont(black_box(&mut pv)))
     });
 
     let mut pv = [[0i32; 256]; K];

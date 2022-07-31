@@ -17,10 +17,9 @@ array-init = "2.0.1"
 crunchy = { version = "0.2.2", default-features = false, features = [
     "limit_64",
 ] }
-cty = "0.2.2"
-digest = "0.10.3"
-generic-array = "0.14.5"
+paste = "1.0.7"
 rand = { version = "0.8.5", default-features = false }
+static_assertions = "1.1.0"
 secrecy = { version = "0.8.0", default-features = false }
 zeroize = { version = "1.5.7", default-features = false, features = [
     "zeroize_derive",
@@ -41,6 +40,16 @@ tiny-keccak = { version = "2.0.2", features = [
 ] }
 
 
+[features]
+default = ["pub_internals"]
+std = ["alloc", "rand/std", "rand/std_rng"]
+alloc = [
+    "zeroize/alloc",
+    "secrecy/alloc"
+]
+pub_internals = [] # some internal modules are made public
+unstable = []
+
 # [[bench]]
 # name = "kem_keypair_bench"
 # harness = false
@@ -52,26 +61,28 @@ harness = false
 [[bench]]
 name = "kyber_poly"
 harness = false
+required-features = ["pub_internals"]
 
 [[bench]]
 name = "dilithium_poly"
 harness = false
+required-features = ["pub_internals"]
 
 [[bench]]
 name = "kyber_polyvec"
 harness = false
+required-features = ["pub_internals"]
 
 [[bench]]
 name = "dilithium_polyvec"
 harness = false
+required-features = ["pub_internals"]
 
 [[bench]]
 name = "kyber_gen_matrix"
 harness = false
+required-features = ["pub_internals"]
 
-[features]
-default = []
-std = []
 
 [package.metadata.docs.rs]
 all-features = true

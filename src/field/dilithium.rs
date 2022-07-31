@@ -1,6 +1,8 @@
-use core::{fmt::Formatter, ops::MulAssign};
-
 use super::*;
+use crate::{
+    lib::{fmt::Formatter, ops::MulAssign},
+    utils::i64_,
+};
 
 pub(crate) const DILITHIUM_Q: i32 = 8_380_417; // ((1<<23) - (1<<13) + 1)
 
@@ -27,7 +29,7 @@ impl AddAssign for DilithiumFq {
 impl SubAssign for DilithiumFq {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0;
+        self.0 -= rhs.0;
     }
 }
 
@@ -60,13 +62,12 @@ fn reduce32(a: i32) -> i32 {
     r
 }
 
-/// For finite field element a with -2^{31}Q <= a <= Q*2^31,
-///              compute r \equiv a*2^{-32} (mod Q) such that -Q < r < Q.
+/// for `a`: -2^{31}*Q <= a <= 2^31*Q, returns a*2^{-32} (mod Q) such that -Q < r < Q.
 #[inline(always)]
 const fn montgomery_reduce(a: i64) -> i32 {
     debug_assert!(-(1 << 31) * DILITHIUM_Q as i64 <= a && a <= (1 << 31) * DILITHIUM_Q as i64);
     let t = (a as i32).wrapping_mul(QINV);
-    let r = (a - (t as i64 * DILITHIUM_Q as i64) >> 32) as i32;
+    let r = i64_::high32(a - (t as i64 * DILITHIUM_Q as i64));
     debug_assert!(
         (r as i64 * MONT as i64).rem_euclid(DILITHIUM_Q as i64) == a.rem_euclid(DILITHIUM_Q as i64)
     );
@@ -96,7 +97,7 @@ impl Mul<i32> for DilithiumFq {
 
     #[inline(always)]
     fn mul(self, rhs: i32) -> Self {
-        Self(montgomery_reduce(self.0 as i64 * rhs as i64))
+        Self(fqmul(self.0, rhs))
     }
 }
 

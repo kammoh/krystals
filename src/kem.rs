@@ -1,8 +1,11 @@
-use crate::{pke, params::*, poly::kyber::KYBER_POLYBYTES};
+use crate::{
+    keccak::fips202::{Digest, Sha3_256},
+    pke::KYBER_SSBYTES,
+    poly::{kyber::POLYBYTES, UNIFORM_SEED_BYTES},
+};
 
 // use super::hash::*;
 // use rand::RngCore;
-
 
 #[derive(Debug)]
 pub enum KyberError {
@@ -10,22 +13,45 @@ pub enum KyberError {
     RngFailure, // was not able to retrieve required random from RNG. Returned by encap and keypair.
 }
 
-
-#[derive(Clone)]
 pub struct PublicKey<const K: usize> {
-    pub bytes: [[u8; KYBER_POLYBYTES]; K],
-    pub seed: [u8; KYBER_SYMBYTES],
+    pub bytes: [[u8; POLYBYTES]; K],
+    pub seed: [u8; UNIFORM_SEED_BYTES],
 }
 
-// // #[derive(Default)]
-pub struct CPASecretKey<const K: usize> {
-    pub bytes: [[u8; KYBER_POLYBYTES]; K], // KYBER_K * KYBER_POLYBYTES
+impl<const K: usize> Default for PublicKey<K> {
+    fn default() -> Self {
+        Self {
+            bytes: [[0; POLYBYTES]; K],
+            seed: [0; UNIFORM_SEED_BYTES],
+        }
+    }
 }
+
+pub struct CPASecretKey<const K: usize>([[u8; POLYBYTES]; K]);
+
+impl<const K: usize> CPASecretKey<K> {
+    #[inline(always)]
+    pub fn bytes(&self) -> &[[u8; POLYBYTES]; K] {
+        &self.0
+    }
+
+    #[inline(always)]
+    pub fn bytes_mut(&mut self) -> &mut [[u8; POLYBYTES]; K] {
+        &mut self.0
+    }
+}
+
+impl<const K: usize> Default for CPASecretKey<K> {
+    fn default() -> Self {
+        Self([[0; POLYBYTES]; K])
+    }
+}
+
 pub struct SecretKey<const K: usize> {
     pub cpa_sk: CPASecretKey<K>,
     pub pk: PublicKey<K>,
-    pub h_pk: [u8; KYBER_SYMBYTES],
-    pub z: [u8; KYBER_SYMBYTES],
+    pub h_pk: [u8; Sha3_256::DIGEST_BYTES],
+    pub z: [u8; KYBER_SSBYTES],
 }
 
 // pub fn generate_keys<R: RngCore, const K: usize>(

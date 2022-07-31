@@ -1,3 +1,5 @@
+use crate::poly::{kyber::NOISE_SEED_BYTES, UNIFORM_SEED_BYTES};
+
 use super::{keccak_f1600::Keccak1600, *};
 
 #[derive(Default, Zeroize, ZeroizeOnDrop)]
@@ -44,8 +46,9 @@ pub trait HasKeccak<P: KeccakParams> {
 }
 
 pub trait Digest<P: KeccakParams, const DIGEST_BYTES: usize>:
-    Default + Zeroize + ZeroizeOnDrop + Sha3Ops<P>
+    Default + Zeroize + ZeroizeOnDrop + SpongeOps<P>
 {
+    const DIGEST_BYTES: usize = DIGEST_BYTES;
     const RATE_LANES: u8 = P::RATE_LANES;
     const DELIM: u8 = P::DELIM;
 
@@ -60,8 +63,8 @@ pub trait Digest<P: KeccakParams, const DIGEST_BYTES: usize>:
 impl Digest<Sha3_256Params, 32> for Sha3_256 {}
 impl Digest<Sha3_512Params, 64> for Sha3_512 {}
 
-impl<T> Sha3Ops<Sha3_256Params> for T where T: Digest<Sha3_256Params, 32> {}
-impl<T> Sha3Ops<Sha3_512Params> for T where T: Digest<Sha3_512Params, 64> {}
+impl<T> SpongeOps<Sha3_256Params> for T where T: Digest<Sha3_256Params, 32> {}
+impl<T> SpongeOps<Sha3_512Params> for T where T: Digest<Sha3_512Params, 64> {}
 
 impl HasKeccak<Sha3_256Params> for Sha3_256 {
     type Keccak = Keccak1600;
@@ -95,7 +98,7 @@ impl HasKeccak<Shake256Params> for Shake256 {
     }
 }
 
-pub trait Sha3Ops<P: KeccakParams>: Default + HasKeccak<P> {
+pub trait SpongeOps<P: KeccakParams>: Default + HasKeccak<P> {
     #[inline(always)]
     fn absorb(&mut self, data: &[u8]) {
         self.keccak().absorb(data);
@@ -106,12 +109,24 @@ pub trait Sha3Ops<P: KeccakParams>: Default + HasKeccak<P> {
     }
 }
 
-pub trait Xof<P: KeccakParams>: Sha3Ops<P> {}
+pub trait HasParams<P: KeccakParams> {
+    type Params: KeccakParams;
+}
 
-impl<T> Sha3Ops<Shake128Params> for T where T: Xof<Shake128Params> {}
-impl<T> Sha3Ops<Shake256Params> for T where T: Xof<Shake256Params> {}
+impl<T, P> HasParams<P> for T
+where
+    T: SpongeOps<P>,
+    P: KeccakParams,
+{
+    type Params = P;
+}
 
-pub trait SqueezeOneBlock<P: KeccakParams>: HasKeccak<P> + Sha3Ops<P> {
+pub trait Xof<P: KeccakParams>: SpongeOps<P> {}
+
+impl<T> SpongeOps<Shake128Params> for T where T: Xof<Shake128Params> {}
+impl<T> SpongeOps<Shake256Params> for T where T: Xof<Shake256Params> {}
+
+pub trait SqueezeOneBlock<P: KeccakParams>: HasKeccak<P> + SpongeOps<P> {
     type OutputBlock: Sized;
     // fn squeezed_block(&mut self) -> &Self::OutputBlock;
     #[inline]
@@ -132,10 +147,18 @@ pub trait OneBlockAbsorb<P: KeccakParams, const ABSORB_BYTES: usize> {
     fn absorb_crystal_pad(&mut self, data: &[u8; ABSORB_BYTES], pad: u64);
 }
 
-pub trait CrystalsXof<P: KeccakParams>: OneBlockAbsorb<P, 32> {
+pub trait CrystalsXof<P: KeccakParams>: OneBlockAbsorb<P, UNIFORM_SEED_BYTES> {
     #[inline(always)]
-    fn absorb_xof_with_nonces(&mut self, data: &[u8; 32], n1: u8, n2: u8) {
+    fn absorb_xof_with_nonces(&mut self, data: &[u8; UNIFORM_SEED_BYTES], n1: u8, n2: u8) {
         let pad_word = u64::from_le_bytes([n1, n2, P::DELIM, 0, 0, 0, 0, 0]);
+        self.absorb_crystal_pad(data, pad_word);
+    }
+}
+
+pub trait CrystalsPrf<P: KeccakParams>: OneBlockAbsorb<P, { NOISE_SEED_BYTES }> {
+    #[inline(always)]
+    fn absorb_prf(&mut self, data: &[u8; NOISE_SEED_BYTES], nonce: u8) {
+        let pad_word = (P::DELIM as u64) << 8 | nonce as u64;
         self.absorb_crystal_pad(data, pad_word);
     }
 }
@@ -144,8 +167,12 @@ impl Xof<Shake128Params> for Shake128 {}
 impl SqueezeOneBlock<Shake128Params> for Shake128 {
     type OutputBlock = [u8; Shake128Params::RATE_BYTES];
 }
-
 impl CrystalsXof<Shake128Params> for Shake128 {}
+
+impl SqueezeOneBlock<Shake256Params> for Shake256 {
+    type OutputBlock = [u8; Shake256Params::RATE_BYTES];
+}
+impl CrystalsPrf<Shake256Params> for Shake256 {}
 
 impl<T, P, const ABSORB_BYTES: usize> OneBlockAbsorb<P, ABSORB_BYTES> for T
 where
@@ -164,7 +191,7 @@ where
         for (lane, bytes) in keccak.state()
             [..<Self as OneBlockAbsorb<_, ABSORB_BYTES>>::ABSORB_LANES]
             .iter_mut()
-            .zip(data.into_array_chunks_iter::<LANE_BYTES>())
+            .zip(data.as_array_chunks::<LANE_BYTES>())
         {
             *lane = u64::from_le_bytes(*bytes);
         }
@@ -238,7 +265,7 @@ mod tests {
 
                 sha3.digest(&data, &mut digest);
 
-                use digest::Digest;
+                use sha3::digest::Digest;
                 another_sha3.update(&data);
                 let golden_digest = another_sha3.finalize_reset();
                 assert_eq!(golden_digest.as_slice(), &digest[..]);
@@ -263,7 +290,7 @@ mod tests {
 
                 sha3.digest(&data, &mut digest);
 
-                use digest::Digest;
+                use sha3::digest::Digest;
                 another_sha3.update(&data);
                 let golden_digest = another_sha3.finalize_reset();
                 assert_eq!(golden_digest.as_slice(), &digest[..]);
@@ -306,7 +333,7 @@ mod tests {
             shake.absorb(&data);
             let xof_out = shake.squeezed_block();
 
-            use digest::{ExtendableOutput, Update, XofReader};
+            use sha3::digest::{ExtendableOutput, Update, XofReader};
             let mut another_shake = sha3::Shake128::default();
             another_shake.update(&data);
             let mut reader = another_shake.finalize_xof();
@@ -342,7 +369,7 @@ mod tests {
             assert_eq!(xof_out.len(), Shake128Params::RATE_BYTES);
 
             {
-                use digest::{ExtendableOutput, Update, XofReader};
+                use sha3::digest::{ExtendableOutput, Update, XofReader};
                 let mut another_shake = sha3::Shake128::default();
                 another_shake.update(&data_aug);
                 let mut reader = another_shake.finalize_xof();

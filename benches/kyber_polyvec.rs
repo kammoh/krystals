@@ -5,7 +5,7 @@ use criterion::{
 };
 use rand::Rng;
 
-use crystals::polyvec::KyberPolyVec;
+use crystals::polyvec::{KyberPolyVec, PolynomialVector};
 use crystals_cref::kyber as cref;
 
 fn kyber_ntt_bench_gen<M: Measurement, const K: usize>(group: &mut BenchmarkGroup<M>) {
@@ -34,7 +34,7 @@ fn kyber_invntt_bench_gen<M: Measurement, const K: usize>(group: &mut BenchmarkG
     let mut pv = KyberPolyVec::<K>::new_random(&mut rng);
 
     group.bench_function(BenchmarkId::new("Rust", K), |b| {
-        b.iter(|| KyberPolyVec::<K>::invntt_tomont(black_box(&mut pv)))
+        b.iter(|| KyberPolyVec::<K>::inv_ntt_tomont(black_box(&mut pv)))
     });
 
     let mut pv = [[0i16; 256]; K];

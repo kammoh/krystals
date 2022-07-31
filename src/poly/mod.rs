@@ -1,10 +1,10 @@
-use core::fmt::Debug;
-use core::ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign};
-use core::slice::{Iter, IterMut};
-
-use crate::field::*;
+use crate::field::Field;
 use crate::keccak::fips202::{CrystalsXof, Shake128, Shake128Params, SqueezeOneBlock};
 use crate::keccak::KeccakParams;
+use crate::lib::fmt::Debug;
+use crate::lib::ops::{AddAssign, Index, IndexMut, SubAssign};
+use crate::lib::slice::{Iter, IterMut};
+use crate::polyvec::PolyVec;
 
 pub mod dilithium;
 pub mod kyber;
@@ -12,26 +12,33 @@ pub mod kyber;
 // TODO use Parameters
 pub const UNIFORM_SEED_BYTES: usize = 32;
 
-pub trait Polynomial<const N: usize>:
+pub trait PolynomialTrait: 
     Index<usize, Output = Self::F>
-    + IntoIterator
     + IndexMut<usize, Output = Self::F>
-    + AsRef<[Self::F; N]>
-    + AsMut<[Self::F; N]>
+    // + IntoIterator
     + Default
     + Sized
     + Clone
-    + Copy
-    + for<'a> Add<&'a Self, Output = Self>
-    + for<'a> Sub<&'a Self, Output = Self>
+    + Copy // needed for PolyVec::default()
     + for<'a> AddAssign<&'a Self>
     + for<'a> SubAssign<&'a Self>
 {
     type F: Field;
+}
+
+pub trait Polynomial<const N: usize>:
+    PolynomialTrait
+    + AsRef<[Self::F; N]>
+    + AsMut<[Self::F; N]>
+{
 
     const N: usize = N;
 
     const INV_NTT_SCALE: <Self::F as Field>::E;
+
+    const SCALAR_BYTES: usize = core::mem::size_of::<<Self::F as Field>::E>();
+
+    const UNIFORM_SEED_BYTES: usize = UNIFORM_SEED_BYTES; // not usable for array size
 
     const NUM_SCALARS: usize =
         Self::N * core::mem::size_of::<Self::F>() / core::mem::size_of::<<Self::F as Field>::E>();
@@ -89,7 +96,7 @@ pub trait Polynomial<const N: usize>:
                 for (u, v) in top.iter_mut().zip(bottom) {
                     let t = *v * zeta;
                     *v = *u - t;
-                    *u = *u + t;
+                    *u += t;
                 }
                 start = end;
             }
@@ -148,7 +155,7 @@ pub trait Polynomial<const N: usize>:
     /// Applies Barrett reduction to all coefficients of a polynomial
     /// # Arguments
     /// * `r` - Input/output polynomial
-    #[inline]
+    #[inline(always)]
     fn reduce(&mut self) {
         for f in self.as_mut() {
             *f = f.reduce();
@@ -156,6 +163,18 @@ pub trait Polynomial<const N: usize>:
     }
 
     fn pointwise(&self, other: &Self, result: &mut Self);
+
+    fn pointwise_acc(&self, other: &Self, result: &mut Self);
+
+    fn vector_mul_acc<const K: usize>(&mut self, lhs: &PolyVec<Self, N, K>, rhs: &PolyVec<Self, N, K>)
+    {
+        let mut t = Self::default();
+
+        for (l, r) in lhs.as_ref().iter().zip(rhs.as_ref().iter()) {
+            l.pointwise(r, &mut t);
+            self.add_assign(&t);
+        }
+    }
 
     fn rej_uniform(&mut self, start: usize, bytes: &[u8; Shake128Params::RATE_BYTES]) -> usize;
 
@@ -176,7 +195,8 @@ pub trait Polynomial<const N: usize>:
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Poly<T: Field, const N: usize>([T; N]);
 
 impl<T: Field, const N: usize> Default for Poly<T, N> {
@@ -199,16 +219,15 @@ impl<T: Field, const N: usize> Default for Poly<T, N> {
 //     }
 // }
 
-impl<F: Field, const N: usize> IntoIterator for Poly<F, N> {
-    type Item = F;
+// impl<F: Field, const N: usize> IntoIterator for Poly<F, N> {
+//     type Item = F;
+//     type IntoIter = core::array::IntoIter<F, N>;
 
-    type IntoIter = core::array::IntoIter<F, N>;
-
-    #[inline(always)]
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
+//     #[inline(always)]
+//     fn into_iter(self) -> Self::IntoIter {
+//         self.0.into_iter()
+//     }
+// }
 
 impl<'a, F: Field, const N: usize> IntoIterator for &'a Poly<F, N> {
     type Item = &'a F;
@@ -230,38 +249,18 @@ impl<'a, F: Field, const N: usize> IntoIterator for &'a mut Poly<F, N> {
     }
 }
 
-impl<T: Field, const N: usize> Add<&Self> for Poly<T, N> {
-    type Output = Self;
-
-    #[inline(always)]
-    fn add(self, rhs: &Self) -> Self::Output {
-        let mut cp = self.clone();
-        cp += rhs;
-        cp
-    }
-}
-impl<T: Field, const N: usize> Sub<&Self> for Poly<T, N> {
-    type Output = Self;
-
-    #[inline(always)]
-    fn sub(self, rhs: &Self) -> Self::Output {
-        let mut cp = self.clone();
-        cp -= rhs;
-        cp
-    }
-}
-
 /// Adds `rhs` polynomial to self; no modular reduction is performed.
 /// # Arguments
 /// * `rhs` - Righthand-side input polynomial
 impl<T: Field, const N: usize> AddAssign<&Self> for Poly<T, N> {
-    #[inline(always)]
+    #[inline]
     fn add_assign(&mut self, rhs: &Self) {
-        for i in 0..self.0.len() {
-            self[i] += rhs[i];
+        for (l, r) in self.into_iter().zip(rhs) {
+            *l += *r;
         }
     }
 }
+
 
 /// Subtracts `rhs` polynomial from self, i.e. `self` <- `self` - `rhs` ; no modular reduction is performed.
 /// # Arguments
@@ -278,14 +277,14 @@ impl<T: Field, const N: usize> SubAssign<&Self> for Poly<T, N> {
 impl<T: Field, const N: usize> Index<usize> for Poly<T, N> {
     type Output = T;
     #[inline(always)]
-    fn index<'a>(&'a self, i: usize) -> &'a Self::Output {
+    fn index(&self, i: usize) -> &Self::Output {
         &self.0[i]
     }
 }
 
 impl<T: Field, const N: usize> IndexMut<usize> for Poly<T, N> {
     #[inline(always)]
-    fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Self::Output {
+    fn index_mut(&mut self, i: usize) -> &mut Self::Output {
         &mut self.0[i]
     }
 }
@@ -303,6 +302,7 @@ impl<F: Field, const N: usize> AsMut<[F; N]> for Poly<F, N> {
         &mut self.0
     }
 }
+
 
 #[cfg(test)]
 mod tests {}

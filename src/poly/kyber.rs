@@ -1,11 +1,10 @@
-use crate::field::kyber::{fqmul, KyberFq, MONT};
-
-use crate::field::{kyber::KYBER_Q, *};
-use crate::keccak::fips202::Shake128Params;
+use crate::field::kyber::{caddq, fqmul, KyberFq, KYBER_Q, MONT};
+use crate::field::Field;
+use crate::keccak::fips202::{CrystalsPrf, HasParams, Shake128, Shake256, SpongeOps};
 use crate::keccak::KeccakParams;
 use crate::utils::split::*;
 
-use super::{Poly, Polynomial};
+use super::{Poly, Polynomial, PolynomialTrait};
 
 pub const KYBER_N: usize = 256;
 
@@ -13,7 +12,62 @@ const ROOT_OF_UNITY: i16 = 17; // 2Nth (256-th) root of 1 mod Q
 
 pub type KyberPoly = Poly<KyberFq, { KYBER_N / 2 }>;
 
-pub const KYBER_POLYBYTES: usize = { KyberPoly::N } * 3;
+pub const POLYBYTES: usize = { KyberPoly::N } * 3;
+
+pub const MSG_BYTES: usize = 32;
+
+pub const NOISE_SEED_BYTES: usize = 32;
+
+pub type Xof = Shake128;
+pub const XOF_BLOCK_BYTES: usize = <Xof as HasParams<_>>::Params::RATE_BYTES;
+
+pub type Prf = Shake256;
+pub const PRF_BLOCK_BYTES: usize = <Prf as HasParams<_>>::Params::RATE_BYTES;
+
+pub(crate) const fn poly_compressed_bytes(d: u8) -> usize {
+    KYBER_N * d as usize / 8 // == 32 * d
+}
+
+pub(crate) const fn poly_compressed_bytes_for_k<const K: usize>() -> usize {
+    match K {
+        2 | 3 => poly_compressed_bytes(4),
+        4 => poly_compressed_bytes(5),
+        _ => unreachable!(),
+    }
+}
+
+pub(crate) const fn polyvec_compressed_bytes_for_k<const K: usize>() -> usize {
+    (match K {
+        2 | 3 => poly_compressed_bytes(10),
+        4 => poly_compressed_bytes(11),
+        _ => unreachable!(),
+    }) * K
+}
+
+pub const fn kyber_ciphertext_bytes<const K: usize>() -> usize {
+    polyvec_compressed_bytes_for_k::<K>() + poly_compressed_bytes_for_k::<K>()
+}
+
+#[inline(always)]
+pub(crate) fn compress_d<const D: usize>(u: i16) -> u16 {
+    const Q: u32 = KYBER_Q as u32;
+    const HALF_Q: u32 = KYBER_Q as u32 / 2;
+
+    let u = caddq(u) as u32;
+
+    ((((u << D as u8) + HALF_Q) / Q) & ((1 << D as u8) - 1)) as u16
+}
+
+#[inline(always)]
+pub(crate) fn decompress_d<const D: usize>(u: u16) -> i16 {
+    debug_assert!(D <= 16);
+
+    const Q: u32 = KYBER_Q as u32;
+
+    let u = u & ((1 << D) - 1);
+
+    ((u as u32 * Q + (1 << (D - 1))) >> D) as i16
+}
 
 const ZETAS: [i16; KyberPoly::N - 1] = {
     let mut zetas = [0i16; KyberPoly::N - 1];
@@ -29,9 +83,11 @@ const ZETAS: [i16; KyberPoly::N - 1] = {
     zetas
 };
 
-impl Polynomial<{ KYBER_N / 2 }> for KyberPoly {
+impl PolynomialTrait for KyberPoly {
     type F = KyberFq;
+}
 
+impl Polynomial<{ KYBER_N / 2 }> for KyberPoly {
     const INV_NTT_SCALE: <Self::F as Field>::E = 1441; // 512 to convert to non-mongomery form
 
     #[inline(always)]
@@ -42,9 +98,9 @@ impl Polynomial<{ KYBER_N / 2 }> for KyberPoly {
     fn pointwise(&self, other: &Self, result: &mut Self) {
         for (((tr, ta), tb), zeta) in result
             .as_mut()
-            .into_array_chunks_mut::<2>()
-            .zip(self.as_ref().into_array_chunks_iter::<2>())
-            .zip(other.as_ref().into_array_chunks_iter::<2>())
+            .as_array_chunks_mut::<2>()
+            .zip(self.as_ref().as_array_chunks::<2>())
+            .zip(other.as_ref().as_array_chunks::<2>())
             .zip(ZETAS[63..].iter())
         {
             tr[0] = ta[0].basemul(tb[0], *zeta);
@@ -52,25 +108,25 @@ impl Polynomial<{ KYBER_N / 2 }> for KyberPoly {
         }
     }
 
-    fn rej_uniform(&mut self, mut ctr: usize, bytes: &[u8; Shake128Params::RATE_BYTES]) -> usize {
-        debug_assert!(ctr < KYBER_N);
-        debug_assert!(Shake128Params::RATE_BYTES % 3 == 0);
+    fn rej_uniform(&mut self, mut ctr: usize, bytes: &[u8; XOF_BLOCK_BYTES]) -> usize {
+        debug_assert!(ctr < Self::NUM_SCALARS);
+        debug_assert!(bytes.len() % 3 == 0);
 
         // TODO compare performance vs safe
-        let p: &mut [i16; KYBER_N] = self.as_scalar_array_mut();
+        let p: &mut [i16; Self::NUM_SCALARS] = self.as_scalar_array_mut();
 
         for buf in bytes.chunks_exact(3) {
             // TODO compare with iterator
-            if ctr >= KYBER_N {
+            if ctr >= Self::NUM_SCALARS {
                 break;
             }
-            let val0 = ((buf[0] >> 0) as u16 | (buf[1] as u16) << 8) & 0xFFF;
+            let val0 = (buf[0] as u16 | (buf[1] as u16) << 8) & 0xFFF;
             if val0 < KYBER_Q as u16 {
                 p[ctr] = val0 as i16;
                 ctr += 1;
             }
 
-            if ctr >= KYBER_N {
+            if ctr >= Self::NUM_SCALARS {
                 break;
             }
             let val1 = ((buf[1] >> 4) as u16 | (buf[2] as u16) << 4) & 0xFFF;
@@ -81,11 +137,25 @@ impl Polynomial<{ KYBER_N / 2 }> for KyberPoly {
         }
         ctr
     }
+
+    fn pointwise_acc(&self, other: &Self, result: &mut Self) {
+        for (((r, a), b), zeta) in result
+            .as_mut()
+            .as_array_chunks_mut::<2>()
+            .zip(self.as_ref().as_array_chunks::<2>())
+            .zip(other.as_ref().as_array_chunks::<2>())
+            .zip(ZETAS[63..].iter())
+        {
+            r[0] += a[0].basemul(b[0], *zeta);
+            r[1] += a[1].basemul(b[1], -*zeta);
+        }
+    }
 }
 
 impl KyberPoly {
-    pub fn to_bytes(&self, bytes: &mut [u8; KYBER_POLYBYTES]) {
-        for (f, r) in self.as_ref().iter().zip(bytes.into_array_chunks_mut::<3>()) {
+    #[inline]
+    pub fn to_bytes(&self, bytes: &mut [u8; POLYBYTES]) {
+        for (f, r) in self.as_ref().iter().zip(bytes.as_array_chunks_mut::<3>()) {
             // map to positive standard representatives
             let f = f.freeze();
             let [t0, t1] = f.0;
@@ -95,47 +165,44 @@ impl KyberPoly {
         }
     }
 
+    #[inline]
     pub fn from_bytes(&mut self, bytes: &[u8]) {
-        for (f, a) in self
-            .as_mut()
-            .iter_mut()
-            .zip(bytes.into_array_chunks_iter::<3>())
-        {
+        for (f, a) in self.as_mut().iter_mut().zip(bytes.as_array_chunks::<3>()) {
             f.0 = [
-                ((a[0] >> 0) as u16 | ((a[1] as u16) << 8) & 0xFFF) as i16,
+                (a[0] as u16 | ((a[1] as u16) << 8) & 0xFFF) as i16,
                 ((a[1] >> 4) as u16 | ((a[2] as u16) << 4) & 0xFFF) as i16,
             ];
         }
     }
 
+    #[inline]
     pub fn cbd2(&mut self, buf: &[u8; KYBER_N / 2]) {
         const MASK55: u32 = 0x55_55_55_55;
-        // const MASK33: u32 = 0x33333333;
-        // const MASK03: u32 = 0x03030303;
-        // const MASK0F: u32 = 0x0F0F0F0F;
 
         for (r, bytes) in self
             .as_mut()
-            .into_array_chunks_mut::<4>()
-            .zip(buf.into_array_chunks_iter::<4>())
+            .as_array_chunks_mut::<4>()
+            .zip(buf.as_array_chunks::<4>())
         {
             let t = u32::from_le_bytes(*bytes);
-            let d: u32 = (t & MASK55) + ((t >> 1) & MASK55);
-            // let e = (d & MASK33) + MASK33 - ((d >> 2) & MASK33);
-            // let f0 = (e & MASK0F) - MASK03;
-            // let f1 = ((e >> 4) & MASK0F) - MASK03;
-            for j in 0..4 {
-                let a = ((d >> (8 * j)) & 0x3) as i16;
-                let b = ((d >> (8 * j + 2)) & 0x3) as i16;
-                r[j].0[0] = a - b;
 
-                let a = ((d >> (8 * j + 3)) & 0x3) as i16;
-                let b = ((d >> (8 * j + 4)) & 0x3) as i16;
-                r[j].0[1] = a - b;
+            let f0 = t & MASK55;
+            let f1 = (t >> 1) & MASK55;
+            let d = f0.wrapping_add(f1);
+
+            for (j, rj) in r.iter_mut().enumerate() {
+                let a = ((d >> (8 * j)) & 0x3) as i8;
+                let b = ((d >> (8 * j + 2)) & 0x3) as i8;
+                rj.0[0] = (a - b) as i16;
+
+                let a = ((d >> (8 * j + 4)) & 0x3) as i8;
+                let b = ((d >> (8 * j + 6)) & 0x3) as i8;
+                rj.0[1] = (a - b) as i16;
             }
         }
     }
 
+    #[inline]
     pub fn cbd3(&mut self, buf: &[u8; 3 * KYBER_N / 4]) {
         const MASK249: u32 = 0x00249249; // 0b001..001001
 
@@ -149,8 +216,8 @@ impl KyberPoly {
 
         for (r, bytes) in self
             .as_mut()
-            .into_array_chunks_mut::<2>()
-            .zip(buf.into_array_chunks_iter::<3>())
+            .as_array_chunks_mut::<2>()
+            .zip(buf.as_array_chunks::<3>())
         {
             let t = load24_littleendian(*bytes);
             let mut d = t & MASK249;
@@ -173,30 +240,31 @@ impl KyberPoly {
         }
     }
 
-    // fn getnoise_eta1<const K: usize, PRF: Prf>(
-    //     prf: &mut PRF,
-    //     seed: &[u8; KYBER_SYMBYTES],
-    //     nonce: u8,
-    // ) -> Self {
-    //     if K == 2 {
-    //         let mut poly = Self::default();
-    //         // let mut buf = [0u8; 3 * Self::N / 4]; // TODO avoid double initialization?
-    //         // prf.prf(&mut buf, seed, nonce);
-    //         // cbd3(&mut poly.0, &buf);
-    //         poly
-    //     } else {
-    //         Self::getnoise_eta2(prf, seed, nonce)
-    //     }
-    // }
+    pub fn getnoise_eta1<const K: usize>(
+        &mut self,
+        prf: &mut Prf,
+        seed: &[u8; NOISE_SEED_BYTES],
+        nonce: u8,
+    ) {
+        if K == 2 {
+            const ETA1: usize = 3;
+            let mut buf = [0u8; ETA1 * KYBER_N / 4];
+            prf.absorb_prf(seed, nonce);
+            prf.squeeze(&mut buf);
+            self.cbd3(&buf);
+        } else {
+            self.getnoise_eta2(prf, seed, nonce);
+        }
+    }
 
-    // fn getnoise_eta2<PRF: Prf>(prf: &mut PRF, seed: &[u8; KYBER_SYMBYTES], nonce: u8) -> Self {
-    //     let mut poly = Poly::default();
-    //     // let mut buf = [0u8; Self::N / 2]; // TODO avoid double initialization?
-    //     // let mut buf = [0u8; 256 / 2]; // FIXME
-    //     // prf.prf(&mut buf, seed, nonce);
-    //     // cbd2(&mut poly.0, &mut buf);
-    //     poly
-    // }
+    pub fn getnoise_eta2(&mut self, prf: &mut Prf, seed: &[u8; NOISE_SEED_BYTES], nonce: u8) {
+        const ETA2: usize = 2;
+        prf.absorb_prf(seed, nonce);
+        let mut buf = [0u8; ETA2 * KYBER_N / 4];
+        prf.absorb_prf(seed, nonce);
+        prf.squeeze(&mut buf);
+        self.cbd2(&buf);
+    }
 
     #[inline(always)]
     pub fn ntt_and_reduce(&mut self) {
@@ -204,141 +272,240 @@ impl KyberPoly {
         self.reduce();
     }
 
-    pub fn into_array(&self) -> [<KyberFq as Field>::E; KYBER_N] {
+    pub fn into_array(&self) -> [<KyberFq as Field>::E; Self::NUM_SCALARS] {
         array_init::array_init(|i: usize| self[i / 2].0[i % 2])
     }
 
-    pub fn as_scalar_array_mut(&mut self) -> &mut [<KyberFq as Field>::E; KYBER_N] {
+    pub fn as_scalar_array_mut(
+        &mut self,
+    ) -> &mut [<<Self as PolynomialTrait>::F as Field>::E; Self::NUM_SCALARS] {
+        // FIXME Safety rationale!
         #[allow(unsafe_code)]
         unsafe {
             core::mem::transmute(self.as_mut())
         }
     }
 
-    //
-    //
-    //
-    //
-    // fn compress_to<const KYBER_K: usize>(&self, r: &mut [u8]) {
-    //     let mut t = [0u8; 8];
-    //     let mut k = 0usize;
-    //     let mut u: i16;
+    pub fn as_scalar_array(
+        &self,
+    ) -> &[<<Self as PolynomialTrait>::F as Field>::E; Self::NUM_SCALARS] {
+        // FIXME Safety rationale!
+        #[allow(unsafe_code)]
+        unsafe {
+            core::mem::transmute(self.as_ref())
+        }
+    }
 
-    //     match KYBER_K {
-    //         2 | 3 => {
-    //             for i in 0..N / 8 {
-    //                 for j in 0..8 {
-    //                     // map to positive standard representatives
-    //                     u = self[8 * i + j];
-    //                     u += (u >> 15) & KYBER_Q as i16;
-    //                     t[j] = (((((u as u16) << 4) + KYBER_Q as u16 / 2) / KYBER_Q as u16) & 15)
-    //                         as u8;
-    //                 }
-    //                 r[k] = t[0] | (t[1] << 4);
-    //                 r[k + 1] = t[2] | (t[3] << 4);
-    //                 r[k + 2] = t[4] | (t[5] << 4);
-    //                 r[k + 3] = t[6] | (t[7] << 4);
-    //                 k += 4;
-    //             }
-    //         }
-    //         _ => {
-    //             // 4
-    //             for i in 0..(N / 8) {
-    //                 for j in 0..8 {
-    //                     // map to positive standard representatives
-    //                     u = self.0[8 * i + j];
-    //                     u += (u >> 15) & KYBER_Q as i16;
-    //                     t[j] = (((((u as u32) << 5) + KYBER_Q as u32 / 2) / KYBER_Q as u32) & 31)
-    //                         as u8;
-    //                 }
-    //                 r[k] = t[0] | (t[1] << 5);
-    //                 r[k + 1] = (t[1] >> 3) | (t[2] << 2) | (t[3] << 7);
-    //                 r[k + 2] = (t[3] >> 1) | (t[4] << 4);
-    //                 r[k + 3] = (t[4] >> 4) | (t[5] << 1) | (t[6] << 6);
-    //                 r[k + 4] = (t[6] >> 2) | (t[7] << 3);
-    //                 k += 5;
-    //             }
-    //         }
-    //     }
-    // }
+    #[inline]
+    pub fn compress_slice<const D: usize>(&self, ct: &mut [u8]) {
+        assert_eq!(ct.len(), poly_compressed_bytes(D as u8));
 
-    // fn decompress<const KYBER_K: usize>(&mut self, a: &[u8]) {
-    //     match KYBER_K {
-    //         2 | 3 => {
-    //             let mut idx = 0usize;
-    //             for i in 0..N / 2 {
-    //                 self.0[2 * i + 0] =
-    //                     ((((a[idx] & 15) as usize * KYBER_Q as usize) + 8) >> 4) as i16;
-    //                 self.0[2 * i + 1] =
-    //                     ((((a[idx] >> 4) as usize * KYBER_Q as usize) + 8) >> 4) as i16;
-    //                 idx += 1;
-    //             }
-    //         }
-    //         _ => {
-    //             // 4
-    //             let mut idx = 0usize;
-    //             let mut t = [0u8; 8];
-    //             for i in 0..N / 8 {
-    //                 t[0] = a[idx + 0];
-    //                 t[1] = (a[idx + 0] >> 5) | (a[idx + 1] << 3);
-    //                 t[2] = a[idx + 1] >> 2;
-    //                 t[3] = (a[idx + 1] >> 7) | (a[idx + 2] << 1);
-    //                 t[4] = (a[idx + 2] >> 4) | (a[idx + 3] << 4);
-    //                 t[5] = a[idx + 3] >> 1;
-    //                 t[6] = (a[idx + 3] >> 6) | (a[idx + 4] << 2);
-    //                 t[7] = a[idx + 4] >> 3;
-    //                 idx += 5;
-    //                 for j in 0..8 {
-    //                     self.0[8 * i + j] =
-    //                         ((((t[j] as u32) & 31) * KYBER_Q as u32 + 16) >> 5) as i16;
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+        #[inline(always)]
+        fn shift_signed(x: u16, shl: i8) -> u8 {
+            if shl >= 0 {
+                debug_assert!(shl < 8);
+                (x << shl) as u8
+            } else {
+                let shr = (-shl) as u8;
+                (x >> shr) as u8
+            }
+        }
 
-    // fn frommont(&mut self) {
-    //     let f = ((1u64 << 32) % KYBER_Q as u64) as i16;
-    //     for i in 0..N {
-    //         let a = self.0[i] as i32 * f as i32;
-    //         self.0[i] = montgomery_reduce(a);
-    //     }
-    // }
+        for (coeffs, bytes) in self
+            .as_scalar_array()
+            .as_array_chunks::<{ 4 * 2 }>()
+            .zip(ct.as_array_chunks_mut::<D>())
+        {
+            let mut shl: i8 = 0;
+            let mut idx = 0;
+            // let mut x = comp_coeffs.next().unwrap(); // array faster?
+            for b in bytes {
+                debug_assert!(shl < 8);
 
-    // fn from_message(msg: &[u8]) -> Self {
-    //     let mut poly = Poly::default();
-    //     let mut mask;
-    //     for i in 0..KYBER_SYMBYTES {
-    //         for j in 0..8 {
-    //             mask = ((msg[i] as u16 >> j) & 1).wrapping_neg();
-    //             poly.0[8 * i + j] = (mask & ((KYBER_Q + 1) / 2) as u16) as i16;
-    //         }
-    //     }
-    //     poly
-    // }
+                *b = shift_signed(compress_d::<D>(coeffs[idx]), shl);
 
-    // fn tomsg(&self, msg: &mut [u8]) {
-    //     let mut t;
+                while D as i8 + shl < 8 {
+                    shl += D as i8;
+                    idx += 1;
+                    *b |= shift_signed(compress_d::<D>(coeffs[idx]), shl);
+                }
+                shl -= 8;
+            }
+        }
+    }
 
-    //     for i in 0..KYBER_SYMBYTES {
-    //         msg[i] = 0;
-    //         for j in 0..8 {
-    //             t = self.0[8 * i + j];
-    //             t += (t >> 15) & KYBER_Q as i16;
-    //             t = (((t << 1) + KYBER_Q as i16 / 2) / KYBER_Q as i16) & 1;
-    //             msg[i] |= (t << j) as u8;
-    //         }
-    //     }
-    // }
-    // /// Inplace conversion of all coefficients of a polynomial from normal domain to Montgomery domain
-    // /// # Arguments
-    // /// * `r` - Input/output polynomial
-    // fn to_mont(&mut self) {
-    //     const F: i16 = ((1u64 << 32) % KYBER_Q as u64) as i16;
-    //     for i in 0..N {
-    //         self.0[i] = montgomery_reduce(self.0[i] as i32 * F as i32);
-    //     }
-    // }
+    #[inline]
+    pub fn decompress_slice<const D: usize>(&mut self, ct: &[u8]) {
+        assert_eq!(ct.len(), poly_compressed_bytes(D as u8));
+
+        #[inline(always)]
+        fn shift_signed<const D: usize>(x: u8, shl: i8) -> u16 {
+            if shl >= 0 {
+                (x as u16) << shl
+            } else {
+                (x as u16) >> (-shl)
+            }
+        }
+
+        for (coeffs, bytes) in self
+            .as_scalar_array_mut()
+            .as_array_chunks_mut::<{ 4 * 2 }>()
+            .zip(ct.as_array_chunks::<D>())
+        {
+            let mut shl: i8 = 0;
+            let mut idx = 0;
+
+            for c in coeffs {
+                let mut d_bits = shift_signed::<D>(bytes[idx], shl);
+
+                while shl + 8 < D as i8 {
+                    shl += 8;
+                    idx += 1;
+                    d_bits |= shift_signed::<D>(bytes[idx], shl);
+                }
+                shl -= D as i8;
+                *c = decompress_d::<D>(d_bits);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn compress<const D: usize>(&self, ct: &mut [[u8; D]; 32]) {
+        // assert_eq!(ct.len(), poly_compressed_bytes(D as u8));
+        // n: number of bytes, m: number of poly elements (2 * i16)
+        // g = gcd(d,4)
+        // 4*n = d*m
+        // let m: usize = 4 / gcd_u8(D as u8, 4) as usize;
+        // let n: usize = (D as u8 / gcd_u8(D as u8, 4)) as usize;
+
+        #[inline(always)]
+        fn shift_signed(x: u16, shl: i8) -> u8 {
+            if shl >= 0 {
+                debug_assert!(shl < 8);
+                (x << shl) as u8
+            } else {
+                let shr = (-shl) as u8;
+                (x >> shr) as u8
+            }
+        }
+
+        for (coeffs, bytes) in self
+            .as_scalar_array()
+            .as_array_chunks::<{ 4 * 2 }>()
+            .zip(ct)
+        {
+            // let mut comp_coeffs = coeff_pairs
+            // .iter()
+            // .flat_map(|f| f.0.map(|x| compress_d::<D>(x)));
+            // only d bits of t[i] are valid, others set to 0
+            // let mut valid_bits = d as i8;
+            // let mut byte_idx = 0;
+            // let mut shl: i8 = 0;
+            // for x in comp_coeffs {
+            //     while valid_bits > 0 {
+            //         bytes[byte_idx] |= shift_signed(x, shl);
+            //         valid_bits += shl - 8;
+
+            //         byte_idx += 1;
+            //     }
+            //     valid_bits = d as i8;
+            //     shl = 0;
+            // }
+            let mut shl: i8 = 0;
+            let mut idx = 0;
+            // let mut x = comp_coeffs.next().unwrap(); // array faster?
+            for b in bytes {
+                debug_assert!(shl < 8);
+
+                *b = shift_signed(compress_d::<D>(coeffs[idx]), shl);
+
+                while D as i8 + shl < 8 {
+                    shl += D as i8;
+                    idx += 1;
+                    *b |= shift_signed(compress_d::<D>(coeffs[idx]), shl);
+                }
+                shl -= 8;
+            }
+        }
+    }
+
+    #[inline]
+    pub fn decompress<const D: usize>(&mut self, ct: &[[u8; D]; 32]) {
+        #[inline(always)]
+        fn shift_signed<const D: usize>(x: u8, shl: i8) -> u16 {
+            if shl >= 0 {
+                (x as u16) << shl
+            } else {
+                (x as u16) >> (-shl)
+            }
+        }
+
+        for (coeff_pairs, bytes) in self.as_mut().chunks_exact_mut(4).zip(ct) {
+            let mut shl: i8 = 0;
+            let mut idx = 0;
+
+            for c in coeff_pairs.iter_mut().flat_map(|f| f.0.iter_mut()) {
+                let mut d_bits = shift_signed::<D>(bytes[idx], shl);
+
+                while shl + 8 < D as i8 {
+                    shl += 8;
+                    idx += 1;
+                    d_bits |= shift_signed::<D>(bytes[idx], shl);
+                }
+                shl -= D as i8;
+                *c = decompress_d::<D>(d_bits);
+            }
+        }
+    }
+
+    pub fn set_from_message(&mut self, msg: &[u8; KYBER_N / 8]) {
+        const ONE_COEFF: i16 = (KYBER_Q + 1) / 2;
+        for (i, byte) in msg.iter().enumerate() {
+            for j in 0..4 {
+                let mask0 = 0i16.wrapping_sub(((*byte) >> (2 * j) & 1) as i16);
+                let mask1 = 0i16.wrapping_sub(((*byte) >> (2 * j + 1) & 1) as i16);
+
+                debug_assert!(mask0 == 0 || mask0 == -1);
+                debug_assert!(mask1 == 0 || mask1 == -1);
+
+                self[4 * i + j].0 = [mask0 & ONE_COEFF, mask1 & ONE_COEFF];
+
+                let x = self[4 * i + j].0;
+                debug_assert!(x[0] == 0 || x[0] == ONE_COEFF);
+                debug_assert!(x[1] == 0 || x[1] == ONE_COEFF);
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn from_message(msg: &[u8; KYBER_N / 8]) -> Self {
+        let mut poly = Self::default();
+        poly.set_from_message(msg);
+        poly
+    }
+
+    pub fn into_message(&self, msg: &mut [u8; 32]) {
+        for (coeff_pairs, byte) in self.as_ref().chunks_exact(4).zip(msg.iter_mut()) {
+            *byte = 0;
+            for (j, c) in coeff_pairs
+                .iter()
+                .flat_map(|f| f.reduce().0.map(|u| compress_d::<1>(u) as u8))
+                .enumerate()
+            {
+                *byte |= c << j;
+            }
+        }
+    }
+
+    /// Inplace conversion of all coefficients of a polynomial from normal domain to Montgomery domain
+    /// # Arguments
+    /// * `r` - Input/output polynomial
+    #[inline]
+    pub fn into_montgomery(&mut self) {
+        for coeff in self {
+            coeff.to_mont();
+        }
+    }
 }
 
 use rand::{CryptoRng, Rng, RngCore};
@@ -349,7 +516,6 @@ impl KyberPoly {
         let mut poly = Self::default();
         fn frand<R: RngCore + CryptoRng>(rng: &mut R) -> i16 {
             rng.gen_range(-KYBER_Q / 2..=KYBER_Q / 2)
-            // rng.gen_range(-KYBER_Q..=KYBER_Q)
         }
         for c in poly.as_mut() {
             c.0[0] = frand(rng);
@@ -361,14 +527,21 @@ impl KyberPoly {
 
 #[cfg(test)]
 mod tests {
-    use crate::field::kyber::KYBER_Q;
+    use crate::field::kyber::{KYBER_Q, QINV};
+    use crate::polyvec::KyberPolyVec;
     use crate::utils::*;
-
+    extern crate std;
     use super::*;
+    use crate::poly::Polynomial;
+    use crate::utils::unsafe_utils::flatten::{FlattenArray, FlattenSlice, FlattenSliceMut};
+    use crystals_cref::kyber as cref;
+    use std::*;
+
+    const M: usize = KyberPoly::NUM_SCALARS / 8;
 
     #[test]
     fn q_inv_test() {
-        assert_eq!(kyber::QINV, invm(KYBER_Q as i32, 1 << 16).unwrap() as i16,);
+        assert_eq!(QINV, invm(KYBER_Q as i32, 1 << 16).unwrap() as i16);
     }
 
     #[test]
@@ -395,23 +568,14 @@ mod tests {
         let mut rng = rand::thread_rng();
         for _ in 0..3_000 {
             let mut poly = KyberPoly::new_random(&mut rng);
-            // println!("poly before ntt: {:?}", poly);
-            let mut p = [0i16; { KYBER_N }];
-            for i in 0..KYBER_N / 2 {
-                p[2 * i] = poly[i].0[0];
-                p[2 * i + 1] = poly[i].0[1];
-            }
-            poly.ntt();
-            poly.reduce();
-            // println!("poly after ntt: {:?}", poly);
-            // println!("p before ntt: {:?}", p);
+            let mut p = poly.into_array();
+
             crystals_cref::kyber::ntt(&mut p);
 
-            for i in 0..KYBER_N / 2 {
-                assert_eq!(p[2 * i], poly[i].0[0]);
-                assert_eq!(p[2 * i + 1], poly[i].0[1]);
-            }
-            // assert_eq!(poly., poly_copy, "failed testcase #{}", testcase);
+            poly.ntt();
+            poly.reduce();
+
+            assert_eq!(poly.into_array(), p);
         }
     }
 
@@ -427,7 +591,7 @@ mod tests {
             crystals_cref::kyber::inv_ntt(&mut p);
             crystals_cref::kyber::poly_reduce(&mut p);
 
-            assert_eq!(p, poly.into_array());
+            assert_eq!(poly.into_array(), p);
         }
     }
 
@@ -450,7 +614,172 @@ mod tests {
             crystals_cref::kyber::poly_pointwise_montgomery(&mut r, &a, &b);
             crystals_cref::kyber::poly_reduce(&mut r);
 
-            assert_eq!(r, poly_r.into_array());
+            assert_eq!(poly_r.into_array(), r);
         }
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn test_cbd2_vs_ref() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..1_000 {
+            let mut poly = KyberPoly::new_random(&mut rng);
+            let mut p = poly.into_array();
+
+            let mut buf = [0u8; 2 * KYBER_N / 4];
+            rng.fill(buf.as_mut());
+
+            poly.cbd2(&buf);
+            crystals_cref::kyber::poly_cbd_eta_eq_2(&mut p, &buf);
+
+            assert_eq!(poly.into_array(), p);
+        }
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn test_cbd3_vs_ref() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..1_000 {
+            let mut poly = KyberPoly::new_random(&mut rng);
+            let mut p = poly.into_array();
+
+            let mut buf = [0u8; 3 * KYBER_N / 4];
+            rng.fill(buf.as_mut());
+
+            poly.cbd3(&buf);
+            crystals_cref::kyber::poly_cbd_eta_eq_3(&mut p, &buf);
+
+            assert_eq!(poly.into_array(), p);
+        }
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn test_getnoise_eta3_vs_ref() {
+        let mut rng = rand::thread_rng();
+        let mut prf = Prf::default();
+        for _ in 0..1_000 {
+            let mut poly = KyberPoly::new_random(&mut rng);
+            let mut p = poly.into_array();
+
+            let mut seed = [0u8; NOISE_SEED_BYTES];
+            rng.fill(seed.as_mut());
+            let nonce = rand::random();
+
+            poly.getnoise_eta1::<2>(&mut prf, &seed, nonce);
+            crystals_cref::kyber::poly_getnoise_eta_eq_3(&mut p, &seed, nonce);
+
+            assert_eq!(poly.into_array(), p);
+        }
+    }
+
+    #[test]
+    #[cfg(not(miri))] // miri does not support calling foreign functions
+    fn test_polycompress_vs_ref() {
+        for _ in 0..1_000 {
+            let poly = KyberPoly::new_random(&mut rand::thread_rng());
+
+            {
+                const D: u8 = 4;
+                let mut ct = [[0u8; { D as usize }]; M];
+                let mut ct_ref = [0u8; poly_compressed_bytes(D)];
+
+                poly.compress::<{ D as usize }>(&mut ct);
+                cref::poly_compress::<2>(&mut ct_ref, &poly.as_scalar_array());
+                assert_eq!(ct.flatten_array(), &ct_ref);
+            }
+
+            {
+                const D: u8 = 4;
+                let mut ct = [[0u8; { D as usize }]; M];
+                let mut ct_ref = [0u8; poly_compressed_bytes(D)];
+
+                poly.compress::<{ D as usize }>(&mut ct);
+                cref::poly_compress::<3>(&mut ct_ref, &poly.as_scalar_array());
+                assert_eq!(ct.flatten_array(), &ct_ref);
+            }
+            {
+                const D: u8 = 5;
+                let mut ct = [[0u8; { D as usize }]; M];
+                let mut ct_ref = [0u8; poly_compressed_bytes(D)];
+
+                poly.compress::<{ D as usize }>(&mut ct);
+                cref::poly_compress::<4>(&mut ct_ref, &poly.as_scalar_array());
+                assert_eq!(ct.flatten_array(), &ct_ref);
+            }
+        }
+    }
+
+    fn test_poly_decompress_vs_ref<const K: usize, const D: usize>() {
+        {
+            let mut rng = rand::thread_rng();
+            let mut poly_ref = [0i16; KYBER_N];
+            let mut poly = KyberPoly::default();
+            let mut ct = [[0u8; D]; M];
+
+            for _ in 0..5_000 {
+                rng.fill_bytes(ct.flatten_slice_mut());
+
+                poly.decompress::<D>(&mut ct);
+                cref::poly_decompress::<K>(&mut poly_ref, ct.flatten_slice());
+                assert_eq!(poly.as_scalar_array(), &poly_ref);
+            }
+        }
+    }
+
+    fn test_polyvec_decompress_vs_ref<const K: usize, const D: usize>() {
+        {
+            let mut rng = rand::thread_rng();
+            let mut pv_ref = [[0i16; KYBER_N]; K];
+            let mut pv = KyberPolyVec::<K>::default();
+            let mut ct = [[[0u8; D]; M]; K];
+
+            for _ in 0..1_000 {
+                for ct_i in ct.flatten_slice_mut() {
+                    rng.fill_bytes(ct_i);
+                }
+
+                pv.decompress::<D>(&mut ct);
+                cref::polyvec_decompress::<K>(&mut pv_ref, ct.flatten_slice());
+                for (p, p_ref) in pv.into_iter().zip(pv_ref) {
+                    assert_eq!(p.as_scalar_array(), &p_ref);
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(not(miri))] // miri does not support calling foreign functions
+    fn polyvec_decompress_vs_ref_2() {
+        test_polyvec_decompress_vs_ref::<2, 10>();
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn polyvec_decompress_vs_ref_3() {
+        test_polyvec_decompress_vs_ref::<3, 10>();
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn polyvec_decompress_vs_ref_4() {
+        test_polyvec_decompress_vs_ref::<4, 11>();
+    }
+
+    #[test]
+    #[cfg(not(miri))] // miri does not support calling foreign functions
+    fn poly_decompress_vs_ref_2() {
+        test_poly_decompress_vs_ref::<2, 4>();
+    }
+    #[test]
+    #[cfg(not(miri))]
+    fn poly_decompress_vs_ref_3() {
+        test_poly_decompress_vs_ref::<3, 4>();
+    }
+    #[test]
+    #[cfg(not(miri))]
+    fn poly_decompress_vs_ref_4() {
+        test_poly_decompress_vs_ref::<4, 5>();
     }
 }

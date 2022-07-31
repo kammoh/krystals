@@ -130,7 +130,7 @@ fn compile_lib(alg: &dyn Scheme, level: u8) {
         let file_name = path.file_name().unwrap().to_str().unwrap();
         !file_name.contains("test")
             && !file_name.contains("genKAT")
-            && !["rng.c", "cpucycles.c", "speed_print.c", "test_speed.c"].contains(&file_name)
+            && !["rng.c", "cpucycles.c", "speed_print.c", "test_speed.c", "randombytes.c"].contains(&file_name)
     }
 
     let c_files = glob(format!("{}/**/*.c", ref_dir.to_string_lossy()).as_str())

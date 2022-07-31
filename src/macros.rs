@@ -1,12 +1,15 @@
+#[cfg(all(test))]
 #[macro_export]
-#[cfg(test)]
+#[cfg(all(test))]
 macro_rules! debug {
     ($($arg:tt)*) => {{
+        #[cfg(not(feature = "std"))]
+        extern crate std;
         std::eprintln!($($arg)*);
     }};
 }
 #[macro_export]
-#[cfg(not(test))]
+#[cfg(not(all(test)))]
 macro_rules! debug {
     ($($arg:tt)*) => {{}};
 }

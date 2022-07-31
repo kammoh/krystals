@@ -112,19 +112,43 @@ pub(crate) trait Splitter<'a, T> {
     fn try_split_array_ref<const N: usize>(&self) -> (Option<&[T; N]>, &[T]);
     fn try_split_array_mut<const N: usize>(&mut self) -> (Option<&mut [T; N]>, &mut [T]);
 
-    fn into_array_chunks_iter<const N: usize>(&self) -> ArrayChunks<'_, T, N>;
-    fn into_array_chunks_mut<const N: usize>(&mut self) -> ArrayChunksMut<'_, T, N>;
-}
-pub(crate) trait ArraySplitter<T> {
-    fn dissect_ref<const N1: usize, const N2: usize>(&self) -> (&[T; N1], &[T; N2]);
-}
-pub(crate) trait ArraySplitterMut<T> {
-    fn dissect_mut<const N1: usize, const N2: usize>(&mut self) -> (&mut [T; N1], &mut [T; N2]);
+    fn as_array_chunks<const N: usize>(&self) -> ArrayChunks<'_, T, N>;
+    fn as_array_chunks_mut<const N: usize>(&mut self) -> ArrayChunksMut<'_, T, N>;
 }
 
-impl<T: Sized, const N: usize> ArraySplitter<T> for [T; N] {
-    fn dissect_ref<const N1: usize, const N2: usize>(&self) -> (&[T; N1], &[T; N2]) {
-        assert_eq!(N1 + N2, N);
+pub(crate) trait SplitCheck<const N1: usize, const N2: usize, const N: usize> {
+    const REQUIREMENT: bool = N1 + N2 == N;
+    const __ASSERT_N1_PLUS_N2_EQ_N: &'static str = [
+        "Sum of the length of splitted arrays does not match the original length (N1 + N2 != N)",
+    ][(!Self::REQUIREMENT) as usize];
+
+    const __ASSERT_X: usize = Self::REQUIREMENT as usize - 1;
+}
+
+impl<T, const N1: usize, const N2: usize, const N: usize> SplitCheck<N1, N2, N> for [T; N] {}
+impl<T, const N1: usize, const N2: usize, const N: usize> SplitCheck<N1, N2, N> for &[T; N] {}
+impl<T, const N1: usize, const N2: usize, const N: usize> SplitCheck<N1, N2, N> for &mut [T; N] {}
+
+pub(crate) trait ArraySplitter<T, const N1: usize, const N2: usize, const N: usize>:
+    SplitCheck<N1, N2, N>
+{
+    fn dissect_ref(&self) -> (&[T; N1], &[T; N2]);
+}
+
+pub(crate) trait ArraySplitterMut<T, const N1: usize, const N2: usize, const N: usize>:
+    SplitCheck<N1, N2, N>
+{
+    fn dissect_mut(&mut self) -> (&mut [T; N1], &mut [T; N2]);
+}
+
+impl<T: Sized, const N1: usize, const N2: usize, const N: usize> ArraySplitter<T, N1, N2, N>
+    for [T; N]
+{
+    fn dissect_ref(&self) -> (&[T; N1], &[T; N2]) {
+        // assert_eq!(N1 + N2, N);
+        debug_assert_eq!(N1 + N2, N); // checked at compiled time with SplitCheck instance
+        let _ = <Self as SplitCheck<N1, N2, N>>::__ASSERT_N1_PLUS_N2_EQ_N;
+
         let (left, right) = self.split_at(N1);
         #[allow(unsafe_code)]
         // SAFETY: 'left' points to [T; N1] as it's [T] of length N1 (checked by split_at)
@@ -137,8 +161,12 @@ impl<T: Sized, const N: usize> ArraySplitter<T> for [T; N] {
         }
     }
 }
-impl<T: Sized, const N: usize> ArraySplitterMut<T> for [T; N] {
-    fn dissect_mut<const N1: usize, const N2: usize>(&mut self) -> (&mut [T; N1], &mut [T; N2]) {
+impl<T: Sized, const N1: usize, const N2: usize, const N: usize> ArraySplitterMut<T, N1, N2, N>
+    for [T; N]
+{
+    fn dissect_mut(&mut self) -> (&mut [T; N1], &mut [T; N2]) {
+        let _: &'static str = <Self as SplitCheck<N1, N2, N>>::__ASSERT_N1_PLUS_N2_EQ_N;
+
         assert_eq!(N1 + N2, N);
         let (left, right) = self.split_at_mut(N1);
         #[allow(unsafe_code)]
@@ -153,27 +181,31 @@ impl<T: Sized, const N: usize> ArraySplitterMut<T> for [T; N] {
     }
 }
 
-impl<T: Sized, const N: usize> ArraySplitter<T> for &[T; N] {
-    fn dissect_ref<const N1: usize, const N2: usize>(&self) -> (&[T; N1], &[T; N2]) {
+impl<T: Sized, const N1: usize, const N2: usize, const N: usize> ArraySplitter<T, N1, N2, N>
+    for &[T; N]
+{
+    fn dissect_ref(&self) -> (&[T; N1], &[T; N2]) {
         (*self).dissect_ref()
     }
 }
 
-impl<T: Sized, const N: usize> ArraySplitterMut<T> for &mut [T; N] {
-    fn dissect_mut<const N1: usize, const N2: usize>(&mut self) -> (&mut [T; N1], &mut [T; N2]) {
+impl<T: Sized, const N1: usize, const N2: usize, const N: usize> ArraySplitterMut<T, N1, N2, N>
+    for &mut [T; N]
+{
+    fn dissect_mut(&mut self) -> (&mut [T; N1], &mut [T; N2]) {
         (*self).dissect_mut()
     }
 }
 
 pub(crate) trait BytesSplitter<'a> {
-    fn into_padded_array_chunks<const N: usize, const PAD_BYTE: u8>(
+    fn as_padded_array_chunks<const N: usize, const PAD_BYTE: u8>(
         &'a self,
     ) -> PaddedArrayChunks<'a, N, PAD_BYTE>;
 }
 
 impl BytesSplitter<'_> for [u8] {
     #[inline]
-    fn into_padded_array_chunks<const N: usize, const PAD_BYTE: u8>(
+    fn as_padded_array_chunks<const N: usize, const PAD_BYTE: u8>(
         &self,
     ) -> PaddedArrayChunks<'_, N, PAD_BYTE> {
         PaddedArrayChunks(Some(self))
@@ -225,14 +257,12 @@ impl<'a, T: 'a> Splitter<'a, T> for [T] {
     }
 
     #[inline]
-    #[must_use]
-    fn into_array_chunks_iter<const N: usize>(&self) -> ArrayChunks<'_, T, N> {
+    fn as_array_chunks<const N: usize>(&self) -> ArrayChunks<'_, T, N> {
         ArrayChunks::new(self)
     }
 
     #[inline]
-    #[must_use]
-    fn into_array_chunks_mut<const N: usize>(&mut self) -> ArrayChunksMut<'_, T, N> {
+    fn as_array_chunks_mut<const N: usize>(&mut self) -> ArrayChunksMut<'_, T, N> {
         ArrayChunksMut::new(self)
     }
 }
@@ -414,7 +444,7 @@ mod tests {
     #[test]
     fn array_chunks_exact() {
         let v = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-        let mut chunks = v.into_array_chunks_iter::<4>();
+        let mut chunks = v.as_array_chunks::<4>();
         assert_eq!(chunks.next().unwrap(), &[1, 2, 3, 4]);
         assert_eq!(chunks.next().unwrap(), &[5, 6, 7, 8]);
         assert_eq!(chunks.next().unwrap(), &[9, 10, 11, 12]);
@@ -425,7 +455,7 @@ mod tests {
     #[test]
     fn array_chunks_with_remainder() {
         let v = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
-        let mut chunks = v.into_array_chunks_iter::<4>();
+        let mut chunks = v.as_array_chunks::<4>();
         assert_eq!(chunks.next().unwrap(), &[1, 2, 3, 4]);
         assert_eq!(chunks.next().unwrap(), &[5, 6, 7, 8]);
         assert_eq!(chunks.next().unwrap(), &[9, 10, 11, 12]);
@@ -436,7 +466,7 @@ mod tests {
     #[test]
     fn array_chunks_mut() {
         let mut v = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
-        for chunks in v.into_array_chunks_mut::<4>() {
+        for chunks in v.as_array_chunks_mut::<4>() {
             for (i, x) in chunks.iter_mut().enumerate() {
                 *x *= *x + i;
             }

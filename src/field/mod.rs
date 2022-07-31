@@ -195,42 +195,42 @@ into_num_impl!(i64);
 #[cfg(has_i128)]
 into_num_impl!(i128);
 
-impl<E, const Q: usize> Add for FqEl<E, Q>
-where
-    E: NumLike,
-{
-    type Output = Self;
+// impl<E, const Q: usize> Add for FqEl<E, Q>
+// where
+//     E: NumLike,
+// {
+//     type Output = Self;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
-    }
-}
+//     fn add(self, rhs: Self) -> Self::Output {
+//         Self(self.0 + rhs.0)
+//     }
+// }
 
-impl<E, const Q: usize> Sub for FqEl<E, Q>
-where
-    E: NumLike,
-{
-    type Output = Self;
+// impl<E, const Q: usize> Sub for FqEl<E, Q>
+// where
+//     E: NumLike,
+// {
+//     type Output = Self;
 
-    fn sub(self, rhs: Self) -> Self::Output {
-        Self(self.0 - rhs.0)
-    }
-}
+//     fn sub(self, rhs: Self) -> Self::Output {
+//         Self(self.0 - rhs.0)
+//     }
+// }
 
-impl<E, const Q: usize> AddAssign<Self> for FqEl<E, Q>
-where
-    E: NumLike,
-{
-    fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0;
-    }
-}
+// impl<E, const Q: usize> AddAssign<Self> for FqEl<E, Q>
+// where
+//     E: NumLike,
+// {
+//     fn add_assign(&mut self, rhs: Self) {
+//         self.0 += rhs.0;
+//     }
+// }
 
-impl<E, const Q: usize> SubAssign<Self> for FqEl<E, Q>
-where
-    E: NumLike,
-{
-    fn sub_assign(&mut self, rhs: Self) {
-        self.0 -= rhs.0;
-    }
-}
+// impl<E, const Q: usize> SubAssign<Self> for FqEl<E, Q>
+// where
+//     E: NumLike,
+// {
+//     fn sub_assign(&mut self, rhs: Self) {
+//         self.0 -= rhs.0;
+//     }
+// }
