@@ -202,18 +202,23 @@ where
 
 impl<const N: usize, const K: usize> PolyVec<KyberPoly, N, K> {
     #[inline(always)]
-    pub fn from_bytes(bytes: &[[u8; POLYBYTES]; K]) -> Self {
-        let mut pv = PolyVec::<KyberPoly, N, K>::default();
-        for (poly, b) in (&mut pv).into_iter().zip(bytes) {
-            poly.from_bytes(b);
-        }
+    pub fn new_deserialize(bytes: &[[u8; POLYBYTES]; K]) -> Self {
+        let mut pv = Self::default();
+        pv.deserialize(bytes);
         pv
     }
 
     #[inline(always)]
-    pub fn into_bytes(&self, r: &mut [[u8; POLYBYTES]; K]) {
+    pub fn deserialize(&mut self, bytes: &[[u8; POLYBYTES]; K]) {
+        for (poly, b) in self.into_iter().zip(bytes) {
+            poly.deserialize(b);
+        }
+    }
+
+    #[inline(always)]
+    pub fn serialize(&self, r: &mut [[u8; POLYBYTES]; K]) {
         for (poly, bytes) in self.into_iter().zip(r) {
-            poly.to_bytes(bytes);
+            poly.serialize(bytes);
         }
     }
 }
@@ -222,7 +227,7 @@ pub type KyberPolyVec<const K: usize> = PolyVec<KyberPoly, { KyberPoly::N }, K>;
 impl<const K: usize> KyberPolyVec<K> {
     #[doc(hidden)]
     pub fn new_random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
-        let mut pv = KyberPolyVec::<K>::default();
+        let mut pv = Self::default();
         for i in 0..K {
             pv[i] = KyberPoly::new_random(rng);
         }

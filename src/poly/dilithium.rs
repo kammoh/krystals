@@ -112,8 +112,7 @@ impl DilithiumPoly {
         poly
     }
 
-    pub fn into_array(&self) -> [<<Self as Polynomial>::F as Field>::E; Self::N] {
-        // array_init::array_init(|i: usize| self[i].0)
+    pub fn into_array(self) -> [<<Self as Polynomial>::F as Field>::E; Self::N] {
         self.0.map(|x| x.0)
     }
 }

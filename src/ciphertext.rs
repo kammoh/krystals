@@ -136,7 +136,7 @@ fn polycompress_d10(ct: &mut [u8; poly_compressed_bytes(10)], poly: &KyberPoly) 
         .as_array_chunks::<M>()
         .zip(ct.as_array_chunks_mut::<N>())
     {
-        let a = f2.map(|f| f.0.map(|x| compress_d::<{ D as usize }>(x)));
+        let a = f2.map(|f| f.0.map(compress_d::<{ D as usize }>));
         let t: &[u16; 4] = a.flatten_array();
 
         r[0] = t[0] as u8;
@@ -161,7 +161,7 @@ fn polycompress_d11(ct: &mut [u8; poly_compressed_bytes(11)], poly: &KyberPoly) 
         .as_array_chunks::<4>()
         .zip(ct.as_array_chunks_mut::<11>())
     {
-        let a = f4.map(|f| f.0.map(|x| compress_d::<{ D as usize }>(x)));
+        let a = f4.map(|f| f.0.map(compress_d::<{ D as usize }>));
         let t: &[u16; 8] = a.flatten_array();
 
         r[0] = t[0] as u8;

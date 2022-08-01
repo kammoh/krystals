@@ -66,7 +66,7 @@ impl<const K: usize> PublicKeyScheme for KyberPke<K> {
         let mut skpv = KyberPolyVec::<K>::default();
         skpv.getnoise_eta1(&mut prf, noise_seed, 0);
         skpv.ntt_and_reduce();
-        skpv.into_bytes(sk.bytes_mut());
+        skpv.serialize(sk.bytes_mut());
 
         // if we can do getnoise_eta1 and/or ntt in parallel (for K polys at once), then this would be faster:
         // let mut e = KyberPolyVec::<K>::default();
@@ -87,12 +87,12 @@ impl<const K: usize> PublicKeyScheme for KyberPke<K> {
             e_i.getnoise_eta1::<K>(&mut prf, noise_seed, (K + i) as u8);
             e_i.ntt();
 
-            pk_poly.into_montgomery();
+            pk_poly.scale_mont();
             (*pk_poly) += &e_i;
         }
 
         pkpv.reduce();
-        pkpv.into_bytes(&mut pk.bytes);
+        pkpv.serialize(&mut pk.bytes);
     }
 }
 
@@ -132,7 +132,7 @@ where
         b.reduce();
         ct.compress_polyvec(&b);
 
-        let pkpv = KyberPolyVec::from_bytes(&pk.bytes);
+        let pkpv = KyberPolyVec::new_deserialize(&pk.bytes);
         let mut v = KyberPoly::default();
         v.vector_mul_acc(&pkpv, &sp);
         v.inv_ntt();
@@ -148,7 +148,7 @@ where
         ct.decompress_polyvec(&mut b);
         b.ntt();
 
-        let skpv = KyberPolyVec::<K>::from_bytes(&sk.bytes());
+        let skpv = KyberPolyVec::<K>::new_deserialize(sk.bytes());
         let mut mp = KyberPoly::default();
         b.basemul_acc(&skpv, &mut mp);
         mp.inv_ntt();
@@ -157,7 +157,7 @@ where
         ct.decompress_poly(&mut v);
         mp -= &v;
 
-        mp.into_message(msg);
+        mp.compress_to_message(msg);
     }
 }
 

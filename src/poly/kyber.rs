@@ -1,10 +1,8 @@
-use core::mem::size_of;
-
 use crate::field::kyber::{caddq, fqmul, KyberFq, KYBER_Q, MONT};
 use crate::field::Field;
 use crate::keccak::fips202::{CrystalsPrf, HasParams, Shake128, Shake256, SpongeOps};
 use crate::keccak::KeccakParams;
-use crate::lib::mem::transmute;
+use crate::lib::mem::{size_of, transmute};
 use crate::utils::flatten::FlattenArray;
 use crate::utils::split::*;
 
@@ -158,7 +156,7 @@ impl SizedPolynomial<{ KYBER_N / 2 }> for KyberPoly {
 
 impl KyberPoly {
     #[inline]
-    pub fn to_bytes(&self, bytes: &mut [u8; POLYBYTES]) {
+    pub fn serialize(&self, bytes: &mut [u8; POLYBYTES]) {
         for (f, r) in self.as_ref().iter().zip(bytes.as_array_chunks_mut::<3>()) {
             // map to positive standard representatives
             let f = f.freeze();
@@ -170,7 +168,7 @@ impl KyberPoly {
     }
 
     #[inline]
-    pub fn from_bytes(&mut self, bytes: &[u8]) {
+    pub fn deserialize(&mut self, bytes: &[u8]) {
         for (f, a) in self.as_mut().iter_mut().zip(bytes.as_array_chunks::<3>()) {
             f.0 = [
                 (a[0] as u16 | ((a[1] as u16) << 8) & 0xFFF) as i16,
@@ -276,7 +274,7 @@ impl KyberPoly {
         self.reduce();
     }
 
-    pub fn into_array(&self) -> [<KyberFq as Field>::E; Self::NUM_SCALARS] {
+    pub fn into_array(self) -> [<KyberFq as Field>::E; Self::NUM_SCALARS] {
         *self.0.map(|f| f.0).flatten_array()
     }
 
@@ -495,7 +493,7 @@ impl KyberPoly {
         poly
     }
 
-    pub fn into_message(&self, msg: &mut [u8; 32]) {
+    pub fn compress_to_message(&self, msg: &mut [u8; 32]) {
         for (coeff_pairs, byte) in self.as_ref().chunks_exact(4).zip(msg.iter_mut()) {
             *byte = 0;
             for (j, c) in coeff_pairs
@@ -512,9 +510,9 @@ impl KyberPoly {
     /// # Arguments
     /// * `r` - Input/output polynomial
     #[inline]
-    pub fn into_montgomery(&mut self) {
+    pub fn scale_mont(&mut self) {
         for coeff in self {
-            coeff.to_mont();
+            coeff.scale_mont();
         }
     }
 }

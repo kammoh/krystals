@@ -106,7 +106,7 @@ impl KyberFq {
     }
 
     #[inline(always)]
-    pub fn to_mont(&mut self) {
+    pub fn scale_mont(&mut self) {
         *self *= MONT_SQUARED;
     }
 }
