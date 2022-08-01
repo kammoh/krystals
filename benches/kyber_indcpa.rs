@@ -4,7 +4,7 @@ use criterion::{
 };
 use rand::{Rng, RngCore};
 
-use crystals::{
+use krystals::{
     ciphertext::{Ciphertext, CompressedCiphertex},
     pke::*,
     poly::{
@@ -99,7 +99,7 @@ fn bench_kyber_encrypt<M: Measurement, const K: usize>(group: &mut BenchmarkGrou
 
     #[cfg(any(feature = "std", feature = "alloc"))]
     {
-        use crystals::ciphertext::VecCipherText;
+        use krystals::ciphertext::VecCipherText;
         let mut ct = VecCipherText::<K>::default();
         group.bench_function(BenchmarkId::new("Rust/VecCipherText", K), |b| {
             b.iter(|| {
@@ -170,7 +170,7 @@ fn bench_kyber_decrypt<M: Measurement, const K: usize>(group: &mut BenchmarkGrou
     }
     #[cfg(any(feature = "std", feature = "alloc"))]
     {
-        use crystals::ciphertext::VecCipherText;
+        use krystals::ciphertext::VecCipherText;
         let mut ct = VecCipherText::<K>::default();
         rng.fill(ct.poly_bytes_mut());
         rng.fill(ct.polyvec_bytes_mut());

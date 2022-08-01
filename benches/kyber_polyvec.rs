@@ -5,7 +5,7 @@ use criterion::{
 };
 use rand::Rng;
 
-use crystals::polyvec::{KyberPolyVec, PolynomialVector};
+use krystals::polyvec::{KyberPolyVec, PolynomialVector};
 use crystals_cref::kyber as cref;
 
 fn kyber_ntt_bench_gen<M: Measurement, const K: usize>(group: &mut BenchmarkGroup<M>) {

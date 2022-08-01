@@ -3,10 +3,9 @@ use criterion::{
     black_box, criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup,
     BenchmarkId, Criterion,
 };
-use rand::Rng;
-
-use crystals::polyvec::{DilithiumPolyVec, PolynomialVector};
 use crystals_cref::dilithium as cref;
+use krystals::polyvec::{DilithiumPolyVec, PolynomialVector};
+use rand::Rng;
 
 fn dilithium_ntt_bench_gen<M: Measurement, const K: usize>(group: &mut BenchmarkGroup<M>) {
     let mut rng = rand::thread_rng();

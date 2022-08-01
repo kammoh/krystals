@@ -5,9 +5,9 @@ authors = ["Kamyar Mohajerani <kammoh@gmail.com>"]
 license = "Apache-2.0"
 readme = "README.md"
 description = "Rust implementation of CRYSTALS-Kyber and CRYSTALS-Dilithium"
-homepage = "https://github.com/kammoh/crystals-rs"
-repository = "https://github.com/kammoh/crystals-rs.git"
 categories = ["cryptography", "no-std"]
+homepage = "https://github.com/kammoh/krystals"
+repository = "https://github.com/kammoh/krystals.git"
 documentation = "https://docs.rs/krystals"
 rust-version = "1.59.0"
 edition = "2021"
@@ -31,11 +31,11 @@ zeroize = { version = "1.5.7", default-features = false, features = [
 ] }
 
 [dev-dependencies]
-criterion = { version = "0.3.5", features = ["html_reports"] }
+criterion = { version = "0.3.6", features = ["html_reports"] }
 hex-literal = "0.3.4"
 rand = "0.8.5"
-crystals-cref = { path = "./cref" }
-sha3 = { version = "0.10.1", default-features = false }
+crystals-cref = { path = "./crystals-cref" }
+sha3 = { version = "0.10.2", default-features = false }
 tiny-keccak = { version = "2.0.2", features = [
     "fips202",
     "keccak",
@@ -89,7 +89,7 @@ harness = false
 all-features = true
 
 [workspace]
-members = ["cref"]
+members = ["crystals-cref"]
 
 [profile.dev]
 
@@ -106,4 +106,4 @@ overflow-checks = false  # Disable integer overflow checks.
 incremental = true       # Speed up build times by caching intermediate results.
 
 [build-dependencies]
-autocfg = "1"
+autocfg = "1.1.0"

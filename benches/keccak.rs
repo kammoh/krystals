@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use crystals::keccak::fips202::Digest;
+use krystals::keccak::fips202::{Digest, Sha3_256, Sha3_512};
 use rand::Rng;
 use sha3::digest::generic_array::GenericArray;
 
@@ -11,7 +11,6 @@ fn keccak_sha3_256<const N: usize>(c: &mut Criterion) {
     rng.fill(&mut data[..]);
 
     group.bench_with_input("crystals-rs", &data, |b, data| {
-        use crystals::keccak::fips202::Sha3_256;
         let mut hash = [0u8; 32];
         let mut sha3 = Sha3_256::default();
 
@@ -54,7 +53,6 @@ fn keccak_sha3_512<const N: usize>(c: &mut Criterion) {
     rng.fill(&mut data[..]);
 
     group.bench_with_input("crystals-rs", &data, |b, data| {
-        use crystals::keccak::fips202::Sha3_512;
         let mut hash = [0u8; 64];
         let mut sha3 = Sha3_512::default();
 

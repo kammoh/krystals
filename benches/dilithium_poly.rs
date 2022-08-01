@@ -1,7 +1,7 @@
 use core::time::Duration;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use crystals::poly::{dilithium::DilithiumPoly, SizedPolynomial};
+use krystals::poly::{dilithium::DilithiumPoly, SizedPolynomial};
 
 fn dilithium_ntt_bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("Dilithium NTT");

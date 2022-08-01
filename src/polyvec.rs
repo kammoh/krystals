@@ -41,13 +41,6 @@ where
     }
 }
 
-// impl<P, const K: usize> PolynomialVector<K> for PolyVec<P, K>
-// where
-//     P: PolynomialTrait,
-// {
-//     type Poly = P;
-// }
-
 impl<P, const N: usize, const K: usize> Index<usize> for PolyVec<P, N, K>
 where
     P: Polynomial,
@@ -148,19 +141,12 @@ where
     }
 
     fn basemul_acc(&self, other: &Self, result: &mut <Self as PolynomialVector>::Poly) {
-        // // TODO: optimize
+        // TODO: optimize
         for (left, right) in self.into_iter().zip(other) {
             left.pointwise_acc(right, result);
         }
         result.reduce();
     }
-
-    //     #[inline(always)]
-    //     pub fn to_mont(&mut self) {
-    //         for i in 0..K {
-    //             self[i].to_mont();
-    //         }
-    //     }
 }
 
 impl<'a, const N: usize, P, const K: usize> IntoIterator for &'a mut PolyVec<P, N, K>

@@ -1,6 +1,6 @@
 [submodule "tests/kyber"]
-	path = cref/kyber
+	path = crystals-cref/kyber
 	url = https://github.com/pq-crystals/kyber.git
 [submodule "tests/dilithium"]
-	path = cref/dilithium
+	path = crystals-cref/dilithium
 	url = https://github.com/pq-crystals/dilithium.git

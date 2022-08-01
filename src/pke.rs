@@ -150,7 +150,7 @@ where
 
         let skpv = KyberPolyVec::<K>::new_deserialize(sk.bytes());
         let mut mp = KyberPoly::default();
-        b.basemul_acc(&skpv, &mut mp);
+        mp.vector_mul_acc(&skpv, &b);
         mp.inv_ntt();
 
         let mut v = KyberPoly::default();
