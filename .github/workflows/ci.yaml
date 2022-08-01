@@ -16,13 +16,13 @@ jobs:
       - run: cargo test --features alloc
       - run: cargo test --features std
 
-  windows:
-    name: Test suite (windows)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo test --features std -- --skip ui --exact
+  # windows:
+  #   name: Test suite (windows)
+  #   runs-on: windows-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: dtolnay/rust-toolchain@nightly
+  #     - run: cargo test --features std -- --skip ui --exact
 
   stable:
     name: Rust ${{matrix.rust}}
@@ -39,37 +39,38 @@ jobs:
       - run: cargo build
       - run: cargo build --no-default-features
       - run: cargo build --features std
+      - run: cargo test
 
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    # if: github.event_name != 'pull_request'
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@clippy
-      - run: cargo clippy -- -Dclippy::all
-      # - run: cargo clippy --features std -- -Dclippy::all
-      # - run: cargo clippy --no-default-features -- -Dclippy::all -Dclippy::pedantic
+  # clippy:
+  #   name: Clippy
+  #   runs-on: ubuntu-latest
+  #   # if: github.event_name != 'pull_request'
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: dtolnay/rust-toolchain@clippy
+  #     - run: cargo clippy -- -Dclippy::all
+  #     # - run: cargo clippy --features std -- -Dclippy::all
+  #     # - run: cargo clippy --no-default-features -- -Dclippy::all -Dclippy::pedantic
 
-  fmt:
-    name: Rust-Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@clippy
-      - run: cargo fmt --all -- --check
+  # fmt:
+  #   name: Rust-Format
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: dtolnay/rust-toolchain@clippy
+  #     - run: cargo fmt --all -- --check
 
-  miri:
-    name: Miri
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@miri
-      # - run: cargo miri test
-      # - run: cargo miri test --no-default-features
-      - run: cargo miri test --features std
-        env:
-          MIRIFLAGS: -Zmiri-strict-provenance
-      - run: cargo miri test --no-default-features
-        env:
-          MIRIFLAGS: -Zmiri-strict-provenance
+  # miri:
+  #   name: Miri
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: dtolnay/rust-toolchain@miri
+  #     # - run: cargo miri test
+  #     # - run: cargo miri test --no-default-features
+  #     - run: cargo miri test --features std
+  #       env:
+  #         MIRIFLAGS: -Zmiri-strict-provenance
+  #     - run: cargo miri test --no-default-features
+  #       env:
+  #         MIRIFLAGS: -Zmiri-strict-provenance

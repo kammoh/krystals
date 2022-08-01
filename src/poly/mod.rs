@@ -1,5 +1,5 @@
 use crate::field::Field;
-use crate::keccak::fips202::{CrystalsXof, Shake128, Shake128Params, SqueezeOneBlock};
+use crate::keccak::fips202::{CrystalsXof, Shake128, Shake128Params, SpongeOps};
 use crate::keccak::KeccakParams;
 use crate::lib::fmt::Debug;
 use crate::lib::ops::{AddAssign, Index, IndexMut, SubAssign};
@@ -12,7 +12,7 @@ pub mod kyber;
 // TODO use Parameters
 pub const UNIFORM_SEED_BYTES: usize = 32;
 
-pub trait PolynomialTrait: 
+pub trait Polynomial: 
     Index<usize, Output = Self::F>
     + IndexMut<usize, Output = Self::F>
     // + IntoIterator
@@ -26,8 +26,8 @@ pub trait PolynomialTrait:
     type F: Field;
 }
 
-pub trait Polynomial<const N: usize>:
-    PolynomialTrait
+pub trait SizedPolynomial<const N: usize>:
+    Polynomial
     + AsRef<[Self::F; N]>
     + AsMut<[Self::F; N]>
 {
@@ -181,16 +181,14 @@ pub trait Polynomial<const N: usize>:
     #[inline]
     fn uniform(&mut self, seed: &[u8; UNIFORM_SEED_BYTES], i: u8, j: u8) {
         let mut shake128 = Shake128::default();
-
         shake128.absorb_xof_with_nonces(seed, i, j);
-
+        let mut xof_out = [0u8; Shake128Params::RATE_BYTES];
+        
         let mut ctr = 0;
-
         while ctr < Self::NUM_SCALARS {
-            let xof_out = shake128.squeezed_block();
-            ctr = self.rej_uniform(ctr, xof_out);
+            shake128.squeeze(&mut xof_out);
+            ctr = self.rej_uniform(ctr, &xof_out);
         }
-
         debug_assert_eq!(ctr, Self::NUM_SCALARS);
     }
 }

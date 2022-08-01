@@ -1,6 +1,6 @@
 use core::time::Duration;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use crystals::poly::{kyber::KyberPoly, Polynomial};
+use crystals::poly::{kyber::KyberPoly, SizedPolynomial};
 use crystals_cref::kyber as cref;
 use rand::thread_rng;
 

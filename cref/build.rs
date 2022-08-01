@@ -130,7 +130,14 @@ fn compile_lib(alg: &dyn Scheme, level: u8) {
         let file_name = path.file_name().unwrap().to_str().unwrap();
         !file_name.contains("test")
             && !file_name.contains("genKAT")
-            && !["rng.c", "cpucycles.c", "speed_print.c", "test_speed.c", "randombytes.c"].contains(&file_name)
+            && ![
+                "rng.c",
+                "cpucycles.c",
+                "speed_print.c",
+                "test_speed.c",
+                "randombytes.c",
+            ]
+            .contains(&file_name)
     }
 
     let c_files = glob(format!("{}/**/*.c", ref_dir.to_string_lossy()).as_str())
@@ -141,15 +148,19 @@ fn compile_lib(alg: &dyn Scheme, level: u8) {
         .files(c_files)
         .include(ref_dir)
         .out_dir(&out_path)
-        .opt_level(3)
-        .force_frame_pointer(false)
-        .flag_if_supported("-march=native")
-        .flag_if_supported("-mtune=native")
-        .debug(false)
+        .debug(false) // we should never need to debug the reference code!
         .define(
             alg.sec_param_name(),
             Some(alg.sec_param_value(level).to_string().as_str()),
         );
+
+    if !cfg!(test) {
+        cc_build
+            .opt_level_str("3") // default on ref, also seems to be the best performance c.f. "2" and "s"
+            .force_frame_pointer(false)
+            .flag_if_supported("-march=native") // not on ref, but slightly improves performance (not supported on macOS/M1)
+            .flag_if_supported("-mtune=native"); // not on ref, but slightly improves performance
+    }
 
     for (sym, repl) in symbol_map {
         cc_build.define(&sym, Some(repl));

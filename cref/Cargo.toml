@@ -9,7 +9,8 @@ cty = "0.2.2"
 ringbuffer = { version = "0.8.4", default-features = false }
 
 [features]
-default = ["std"]
+default = ["std", "randombytes"]
+randombytes = ["std"]  # determinitstic randombytes replacement
 std = []
 
 [dev-dependencies]

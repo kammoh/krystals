@@ -1,10 +1,14 @@
+use core::mem::size_of;
+
 use crate::field::kyber::{caddq, fqmul, KyberFq, KYBER_Q, MONT};
 use crate::field::Field;
 use crate::keccak::fips202::{CrystalsPrf, HasParams, Shake128, Shake256, SpongeOps};
 use crate::keccak::KeccakParams;
+use crate::lib::mem::transmute;
+use crate::utils::flatten::FlattenArray;
 use crate::utils::split::*;
 
-use super::{Poly, Polynomial, PolynomialTrait};
+use super::{Poly, Polynomial, SizedPolynomial};
 
 pub const KYBER_N: usize = 256;
 
@@ -83,11 +87,11 @@ const ZETAS: [i16; KyberPoly::N - 1] = {
     zetas
 };
 
-impl PolynomialTrait for KyberPoly {
+impl Polynomial for KyberPoly {
     type F = KyberFq;
 }
 
-impl Polynomial<{ KYBER_N / 2 }> for KyberPoly {
+impl SizedPolynomial<{ KYBER_N / 2 }> for KyberPoly {
     const INV_NTT_SCALE: <Self::F as Field>::E = 1441; // 512 to convert to non-mongomery form
 
     #[inline(always)]
@@ -273,26 +277,33 @@ impl KyberPoly {
     }
 
     pub fn into_array(&self) -> [<KyberFq as Field>::E; Self::NUM_SCALARS] {
-        array_init::array_init(|i: usize| self[i / 2].0[i % 2])
+        *self.0.map(|f| f.0).flatten_array()
     }
 
-    pub fn as_scalar_array_mut(
+    fn as_scalar_array_mut(
         &mut self,
-    ) -> &mut [<<Self as PolynomialTrait>::F as Field>::E; Self::NUM_SCALARS] {
+    ) -> &mut [<<Self as Polynomial>::F as Field>::E; Self::NUM_SCALARS] {
         // FIXME Safety rationale!
+        debug_assert_eq!(
+            size_of::<[<<Self as Polynomial>::F as Field>::E; Self::NUM_SCALARS]>(),
+            size_of::<Self>()
+        );
+
         #[allow(unsafe_code)]
         unsafe {
-            core::mem::transmute(self.as_mut())
+            transmute(self.as_mut())
         }
     }
 
-    pub fn as_scalar_array(
-        &self,
-    ) -> &[<<Self as PolynomialTrait>::F as Field>::E; Self::NUM_SCALARS] {
+    fn as_scalar_array(&self) -> &[<<Self as Polynomial>::F as Field>::E; Self::NUM_SCALARS] {
         // FIXME Safety rationale!
+        debug_assert_eq!(
+            size_of::<[<<Self as Polynomial>::F as Field>::E; Self::NUM_SCALARS]>(),
+            size_of::<Self>()
+        );
         #[allow(unsafe_code)]
         unsafe {
-            core::mem::transmute(self.as_ref())
+            transmute(self.as_ref())
         }
     }
 
@@ -413,7 +424,7 @@ impl KyberPoly {
             // }
             let mut shl: i8 = 0;
             let mut idx = 0;
-            // let mut x = comp_coeffs.next().unwrap(); // array faster?
+            
             for b in bytes {
                 debug_assert!(shl < 8);
 
@@ -532,7 +543,7 @@ mod tests {
     use crate::utils::*;
     extern crate std;
     use super::*;
-    use crate::poly::Polynomial;
+    use crate::poly::SizedPolynomial;
     use crate::utils::unsafe_utils::flatten::{
         FlattenArray, FlattenSlice, FlattenSliceMut, FlattenTwice, FlattenTwiceMut,
     };

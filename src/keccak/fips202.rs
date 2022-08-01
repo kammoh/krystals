@@ -1,6 +1,5 @@
-use crate::poly::{kyber::NOISE_SEED_BYTES, UNIFORM_SEED_BYTES};
-
 use super::{keccak_f1600::Keccak1600, *};
+use crate::poly::{kyber::NOISE_SEED_BYTES, UNIFORM_SEED_BYTES};
 
 #[derive(Default, Zeroize, ZeroizeOnDrop)]
 pub struct Sha3_256(Keccak1600);
@@ -66,6 +65,9 @@ impl Digest<Sha3_512Params, 64> for Sha3_512 {}
 impl<T> SpongeOps<Sha3_256Params> for T where T: Digest<Sha3_256Params, 32> {}
 impl<T> SpongeOps<Sha3_512Params> for T where T: Digest<Sha3_512Params, 64> {}
 
+impl SpongeOps<Shake128Params> for Shake128 {}
+impl SpongeOps<Shake256Params> for Shake256 {}
+
 impl HasKeccak<Sha3_256Params> for Sha3_256 {
     type Keccak = Keccak1600;
     #[inline(always)]
@@ -121,25 +123,6 @@ where
     type Params = P;
 }
 
-pub trait Xof<P: KeccakParams>: SpongeOps<P> {}
-
-impl<T> SpongeOps<Shake128Params> for T where T: Xof<Shake128Params> {}
-impl<T> SpongeOps<Shake256Params> for T where T: Xof<Shake256Params> {}
-
-pub trait SqueezeOneBlock<P: KeccakParams>: HasKeccak<P> + SpongeOps<P> {
-    type OutputBlock: Sized;
-    // fn squeezed_block(&mut self) -> &Self::OutputBlock;
-    #[inline]
-    fn squeezed_block(&mut self) -> &Self::OutputBlock {
-        #![allow(unsafe_code)] // FIXME FIXME FIXME SAFETY
-        let keccak = self.keccak();
-        keccak.permute();
-
-        let a = unsafe { keccak.state().get_unchecked(..P::RATE_LANES as usize) };
-        unsafe { &*(a.as_ptr() as *const Self::OutputBlock) }
-    }
-}
-
 pub trait OneBlockAbsorb<P: KeccakParams, const ABSORB_BYTES: usize> {
     const ABSORB_BYTES: usize = ABSORB_BYTES;
     const ABSORB_LANES: usize = ABSORB_BYTES / P::LANE_BYTES;
@@ -163,15 +146,8 @@ pub trait CrystalsPrf<P: KeccakParams>: OneBlockAbsorb<P, { NOISE_SEED_BYTES }> 
     }
 }
 
-impl Xof<Shake128Params> for Shake128 {}
-impl SqueezeOneBlock<Shake128Params> for Shake128 {
-    type OutputBlock = [u8; Shake128Params::RATE_BYTES];
-}
 impl CrystalsXof<Shake128Params> for Shake128 {}
 
-impl SqueezeOneBlock<Shake256Params> for Shake256 {
-    type OutputBlock = [u8; Shake256Params::RATE_BYTES];
-}
 impl CrystalsPrf<Shake256Params> for Shake256 {}
 
 impl<T, P, const ABSORB_BYTES: usize> OneBlockAbsorb<P, ABSORB_BYTES> for T
@@ -188,7 +164,7 @@ where
 
         let keccak = self.keccak();
 
-        for (lane, bytes) in keccak.state()
+        for (lane, bytes) in keccak.state_mut()
             [..<Self as OneBlockAbsorb<_, ABSORB_BYTES>>::ABSORB_LANES]
             .iter_mut()
             .zip(data.as_array_chunks::<LANE_BYTES>())
@@ -196,10 +172,10 @@ where
             *lane = u64::from_le_bytes(*bytes);
         }
 
-        keccak.state()[<Self as OneBlockAbsorb<_, ABSORB_BYTES>>::ABSORB_LANES] = pad_word;
+        keccak.state_mut()[<Self as OneBlockAbsorb<_, ABSORB_BYTES>>::ABSORB_LANES] = pad_word;
 
         if keccak.1 {
-            for lane in keccak.state()
+            for lane in keccak.state_mut()
                 [<Self as OneBlockAbsorb<_, ABSORB_BYTES>>::ABSORB_LANES + 1..]
                 .iter_mut()
             {
@@ -211,8 +187,6 @@ where
         KeccakOps::<P>::finalize_xor(keccak);
     }
 }
-
-impl Xof<Shake256Params> for Shake256 {}
 
 #[cfg(test)]
 mod tests {
@@ -326,12 +300,15 @@ mod tests {
 
         const MAX_LEN: usize = if cfg!(miri) { 6 } else { 666 };
 
+        let mut xof_out = [0u8; Shake128Params::RATE_BYTES];
+
         for n in 0..MAX_LEN {
             let mut data = vec![0u8; n];
 
             rng.fill_bytes(&mut data);
             shake.absorb(&data);
-            let xof_out = shake.squeezed_block();
+            shake.squeeze(&mut xof_out);
+            // let xof_out = shake.squeezed_block();
 
             use sha3::digest::{ExtendableOutput, Update, XofReader};
             let mut another_shake = sha3::Shake128::default();
@@ -339,7 +316,7 @@ mod tests {
             let mut reader = another_shake.finalize_xof();
             reader.read(&mut golden_xof_out);
 
-            assert_eq!(&golden_xof_out, xof_out);
+            assert_eq!(&golden_xof_out, &xof_out);
         }
     }
 
@@ -354,6 +331,8 @@ mod tests {
         let mut data = [0u8; 32];
         let mut data_aug = [0u8; 32 + 2];
 
+        let mut xof_out = [0u8; Shake128Params::RATE_BYTES];
+
         for _ in 0..N_TESTS {
             let n1 = rand::random::<u8>();
             let n2 = rand::random::<u8>();
@@ -364,7 +343,8 @@ mod tests {
             data_aug[33] = n2;
 
             shake.absorb_xof_with_nonces(&data, n1, n2);
-            let xof_out = shake.squeezed_block();
+            // let xof_out = shake.squeezed_block();
+            shake.squeeze(&mut xof_out);
 
             assert_eq!(xof_out.len(), Shake128Params::RATE_BYTES);
 
@@ -376,7 +356,7 @@ mod tests {
                 reader.read(&mut golden_xof_out);
             }
 
-            assert_eq!(&golden_xof_out, xof_out);
+            assert_eq!(&golden_xof_out, &xof_out);
         }
     }
 }

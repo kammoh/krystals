@@ -43,11 +43,8 @@ tiny-keccak = { version = "2.0.2", features = [
 [features]
 default = ["pub_internals"]
 std = ["alloc", "rand/std", "rand/std_rng"]
-alloc = [
-    "zeroize/alloc",
-    "secrecy/alloc"
-]
-pub_internals = [] # some internal modules are made public
+alloc = ["zeroize/alloc", "secrecy/alloc"]
+pub_internals = []                          # some internal modules are made public
 unstable = []
 
 # [[bench]]
@@ -55,7 +52,7 @@ unstable = []
 # harness = false
 
 [[bench]]
-name = "keccak_bench"
+name = "keccak"
 harness = false
 
 [[bench]]
@@ -82,6 +79,10 @@ required-features = ["pub_internals"]
 name = "kyber_gen_matrix"
 harness = false
 required-features = ["pub_internals"]
+
+[[bench]]
+name = "kyber_indcpa"
+harness = false
 
 
 [package.metadata.docs.rs]

@@ -1,4 +1,4 @@
-use core::slice::*;
+use crate::lib::slice::*;
 
 /// copy of unstable core::slice::iter::ArrayChunks
 #[cfg(not(any(has_array_chunks, feature = "array_chunks")))]
@@ -102,12 +102,6 @@ impl<'a, T, const N: usize> ArrayChunksMut<'a, T, N> {
     }
 }
 
-#[must_use]
-pub struct FullArrayChunks<'a, T: 'a, const N: usize>(Option<&'a [T]>);
-
-#[must_use]
-pub struct PaddedArrayChunks<'a, const N: usize, const PAD_BYTE: u8>(Option<&'a [u8]>);
-
 pub(crate) trait Splitter<'a, T> {
     fn try_split_array_ref<const N: usize>(&self) -> (Option<&[T; N]>, &[T]);
     fn try_split_array_mut<const N: usize>(&mut self) -> (Option<&mut [T; N]>, &mut [T]);
@@ -194,21 +188,6 @@ impl<T: Sized, const N1: usize, const N2: usize, const N: usize> ArraySplitterMu
 {
     fn dissect_mut(&mut self) -> (&mut [T; N1], &mut [T; N2]) {
         (*self).dissect_mut()
-    }
-}
-
-pub(crate) trait BytesSplitter<'a> {
-    fn as_padded_array_chunks<const N: usize, const PAD_BYTE: u8>(
-        &'a self,
-    ) -> PaddedArrayChunks<'a, N, PAD_BYTE>;
-}
-
-impl BytesSplitter<'_> for [u8] {
-    #[inline]
-    fn as_padded_array_chunks<const N: usize, const PAD_BYTE: u8>(
-        &self,
-    ) -> PaddedArrayChunks<'_, N, PAD_BYTE> {
-        PaddedArrayChunks(Some(self))
     }
 }
 
@@ -335,53 +314,6 @@ impl<'a, T: 'a, const N: usize> Iterator for ArrayChunksMut<'a, T, N> {
     #[inline]
     fn last(self) -> Option<Self::Item> {
         self.iter.last()
-    }
-}
-
-impl<'a, const N: usize> Iterator for FullArrayChunks<'a, u8, N> {
-    type Item = [u8; N];
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(ref mut inner) = self.0 {
-            Some(if let (Some(head), tail) = inner.try_split_array_ref() {
-                *inner = tail;
-                *head
-            } else {
-                let mut buffer = [0u8; N];
-                buffer[0..inner.len()].copy_from_slice(inner);
-                self.0 = None;
-                buffer
-            })
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a, const N: usize, const PAD_BYTE: u8> Iterator for PaddedArrayChunks<'a, N, PAD_BYTE> {
-    type Item = [u8; N];
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(ref mut cursor) = self.0 {
-            Some(if let (Some(head), tail) = cursor.try_split_array_ref() {
-                *cursor = tail;
-                *head
-            } else {
-                let len = cursor.len();
-                // Safety: len <= N - 1, as `try_split_array_ref` has returned `None`
-                let mut buffer = [0u8; N];
-                buffer[0..len].copy_from_slice(cursor);
-                if PAD_BYTE != 0 {
-                    buffer[len] = PAD_BYTE;
-                }
-                self.0 = None;
-                buffer
-            })
-        } else {
-            None
-        }
     }
 }
 

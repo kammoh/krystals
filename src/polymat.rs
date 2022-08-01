@@ -1,18 +1,18 @@
 use core::ops::{Index, IndexMut};
 
 use crate::{
-    poly::{kyber::KyberPoly, Polynomial, UNIFORM_SEED_BYTES},
+    poly::{kyber::KyberPoly, SizedPolynomial, UNIFORM_SEED_BYTES},
     polyvec::*,
 };
 
 #[derive(Debug)]
 pub struct PolyMat<P, const N: usize, const K: usize, const L: usize>([PolyVec<P, N, L>; K])
 where
-    P: Polynomial<N>;
+    P: SizedPolynomial<N>;
 
 impl<P, const N: usize, const K: usize, const L: usize> Default for PolyMat<P, N, K, L>
 where
-    P: Polynomial<N>,
+    P: SizedPolynomial<N>,
 {
     #[inline]
     fn default() -> Self {
@@ -22,7 +22,7 @@ where
 
 impl<P, const N: usize, const K: usize, const L: usize> Index<usize> for PolyMat<P, N, K, L>
 where
-    P: Polynomial<N>,
+    P: SizedPolynomial<N>,
 {
     type Output = PolyVec<P, N, L>;
 
@@ -34,7 +34,7 @@ where
 
 impl<P, const N: usize, const K: usize, const L: usize> IndexMut<usize> for PolyMat<P, N, K, L>
 where
-    P: Polynomial<N>,
+    P: SizedPolynomial<N>,
 {
     #[inline(always)]
     fn index_mut(&mut self, i: usize) -> &mut Self::Output {
@@ -45,7 +45,7 @@ where
 impl<P, const N: usize, const K: usize, const L: usize> AsRef<[PolyVec<P, N, L>; K]>
     for PolyMat<P, N, K, L>
 where
-    P: Polynomial<N>,
+    P: SizedPolynomial<N>,
 {
     #[inline(always)]
     fn as_ref(&self) -> &[PolyVec<P, N, L>; K] {
@@ -56,7 +56,7 @@ where
 impl<P, const N: usize, const K: usize, const L: usize> AsMut<[PolyVec<P, N, L>; K]>
     for PolyMat<P, N, K, L>
 where
-    P: Polynomial<N>,
+    P: SizedPolynomial<N>,
 {
     #[inline(always)]
     fn as_mut(&mut self) -> &mut [PolyVec<P, N, L>; K] {
@@ -66,7 +66,7 @@ where
 
 impl<P, const N: usize, const K: usize, const L: usize> PolyMat<P, N, K, L>
 where
-    P: Polynomial<N>,
+    P: SizedPolynomial<N>,
 {
     //     #[inline]
     //     pub fn mult_vec(&self, polyvec: &PolyVec<T, N, K>) -> PolyVec<T, N, K> {

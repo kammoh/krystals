@@ -3,18 +3,18 @@ use core::ops::{AddAssign, Index, IndexMut};
 use rand::{CryptoRng, RngCore};
 
 use crate::{
-    keccak::fips202::{CrystalsPrf, SpongeOps},
+    keccak::fips202::{CrystalsPrf, CrystalsXof, SpongeOps},
     poly::{
         dilithium::DilithiumPoly,
-        kyber::{KyberPoly, Prf, KYBER_N, NOISE_SEED_BYTES, POLYBYTES},
-        PolynomialTrait, UNIFORM_SEED_BYTES,
+        kyber::{KyberPoly, Prf, Xof, KYBER_N, NOISE_SEED_BYTES, POLYBYTES, XOF_BLOCK_BYTES},
+        Polynomial, UNIFORM_SEED_BYTES,
     },
 };
 
-use super::poly::Polynomial;
+use super::poly::SizedPolynomial;
 
 pub trait PolynomialVector: Default + Sized + Index<usize> + IndexMut<usize> {
-    type Poly: PolynomialTrait;
+    type Poly: Polynomial;
     const K: usize;
 
     fn ntt(&mut self);
@@ -30,11 +30,11 @@ pub trait PolynomialVector: Default + Sized + Index<usize> + IndexMut<usize> {
 #[derive(Debug, Clone, Copy)]
 pub struct PolyVec<P, const N: usize, const K: usize>([P; K])
 where
-    P: PolynomialTrait;
+    P: Polynomial;
 
 impl<P, const N: usize, const K: usize> Default for PolyVec<P, N, K>
 where
-    P: PolynomialTrait,
+    P: Polynomial,
 {
     fn default() -> Self {
         PolyVec([P::default(); K])
@@ -50,7 +50,7 @@ where
 
 impl<P, const N: usize, const K: usize> Index<usize> for PolyVec<P, N, K>
 where
-    P: PolynomialTrait,
+    P: Polynomial,
 {
     type Output = P;
     fn index(&self, i: usize) -> &Self::Output {
@@ -60,7 +60,7 @@ where
 
 impl<P, const N: usize, const K: usize> IndexMut<usize> for PolyVec<P, N, K>
 where
-    P: PolynomialTrait,
+    P: Polynomial,
 {
     fn index_mut(&mut self, i: usize) -> &mut Self::Output {
         &mut self.0[i]
@@ -69,7 +69,7 @@ where
 
 impl<P, const N: usize, const K: usize> AsRef<[P; K]> for PolyVec<P, N, K>
 where
-    P: PolynomialTrait,
+    P: Polynomial,
 {
     #[inline(always)]
     fn as_ref(&self) -> &[P; K] {
@@ -79,7 +79,7 @@ where
 
 impl<P, const N: usize, const K: usize> AsMut<[P; K]> for PolyVec<P, N, K>
 where
-    P: PolynomialTrait,
+    P: Polynomial,
 {
     #[inline(always)]
     fn as_mut(&mut self) -> &mut [P; K] {
@@ -89,7 +89,7 @@ where
 
 impl<P, const N: usize, const K: usize> PolynomialVector for PolyVec<P, N, K>
 where
-    P: Polynomial<N>,
+    P: SizedPolynomial<N>,
 {
     const K: usize = K;
     type Poly = P;
@@ -125,12 +125,25 @@ where
 
     #[inline]
     fn uniform_xof<const TRANSPOSED: bool>(&mut self, seed: &[u8; UNIFORM_SEED_BYTES], i: u8) {
+        let mut shake128 = Xof::default();
+        let mut xof_out = [0u8; XOF_BLOCK_BYTES];
+
         for (j, poly) in self.as_mut().iter_mut().enumerate() {
-            if TRANSPOSED {
-                poly.uniform(seed, i, j as u8);
+            let (i, j) = if TRANSPOSED {
+                (i, j as u8)
             } else {
-                poly.uniform(seed, j as u8, i);
+                (j as u8, i)
+            };
+
+            shake128.absorb_xof_with_nonces(seed, i, j);
+
+            let mut ctr = 0;
+            while ctr < Self::Poly::NUM_SCALARS {
+                shake128.squeeze(&mut xof_out);
+                ctr = poly.rej_uniform(ctr, &xof_out);
             }
+
+            debug_assert_eq!(ctr, Self::Poly::NUM_SCALARS);
         }
     }
 
@@ -152,7 +165,7 @@ where
 
 impl<'a, const N: usize, P, const K: usize> IntoIterator for &'a mut PolyVec<P, N, K>
 where
-    P: PolynomialTrait,
+    P: Polynomial,
 {
     type Item = &'a mut P;
 
@@ -165,7 +178,7 @@ where
 
 impl<'a, P, const N: usize, const K: usize> IntoIterator for &'a PolyVec<P, N, K>
 where
-    P: PolynomialTrait,
+    P: Polynomial,
 {
     type Item = &'a P;
 
@@ -178,7 +191,7 @@ where
 
 impl<P, const N: usize, const K: usize> AddAssign<&Self> for PolyVec<P, N, K>
 where
-    P: PolynomialTrait,
+    P: Polynomial,
 {
     fn add_assign(&mut self, rhs: &Self) {
         for i in 0..K {

@@ -42,16 +42,15 @@ mod lib {
     pub use std::borrow::{Cow, ToOwned};
 
     #[cfg(all(feature = "alloc", not(feature = "std"), not(test)))]
-    pub use alloc::vec::{Vec, from_elem};
+    pub use alloc::vec::{from_elem, Vec};
     #[cfg(any(feature = "std", test))]
-    pub use std::vec::{Vec, from_elem};
+    pub use std::vec::{from_elem, Vec};
 }
 
 #[macro_use]
 mod macros;
 
 mod field;
-mod params;
 mod utils; // FIXME
 
 // needed for benchmarks

@@ -1,8 +1,9 @@
+use super::{Keccak, KeccakOps, KeccakParams, KeccakState};
+use crate::lib::slice::{Iter, IterMut};
 use crate::utils::split::Splitter;
 
-use super::{Keccak, KeccakOps, KeccakParams, KeccakState};
+use array_init::array_init;
 use crunchy::unroll;
-
 use zeroize::Zeroize;
 
 pub type Keccak1600 = Keccak<u64, 25>;
@@ -31,7 +32,12 @@ impl KeccakState for Keccak1600 {
     type State = [Self::Lane; 25];
 
     #[inline(always)]
-    fn state(&mut self) -> &mut [Self::Lane] {
+    fn state(&self) -> &[Self::Lane; Self::NUM_LANES] {
+        &self.0
+    }
+
+    #[inline(always)]
+    fn state_mut(&mut self) -> &mut [Self::Lane; Self::NUM_LANES] {
         &mut self.0
     }
 
@@ -41,6 +47,15 @@ impl KeccakState for Keccak1600 {
             self.zeroize();
         }
         self.1 = true;
+    }
+
+    #[inline(always)]
+    fn lanes_iter_mut<P: KeccakParams>(&mut self) -> IterMut<'_, Self::Lane> {
+        self.0[..{ P::RATE_LANES as usize }].iter_mut()
+    }
+    #[inline(always)]
+    fn lanes_iter<P: KeccakParams>(&self) -> Iter<'_, Self::Lane> {
+        self.0[..{ P::RATE_LANES as usize }].iter()
     }
 }
 
@@ -55,7 +70,7 @@ where
         const LANE_BYTES: usize = 8;
         assert!(LANE_BYTES == P::LANE_BYTES);
         const FINALIZE_CONST: u64 = 1 << (LANE_BYTES * 8 - 1); // 1 << 63
-        self.state()[P::RATE_LANES as usize - 1] ^= FINALIZE_CONST;
+        self.state_mut()[P::RATE_LANES as usize - 1] ^= FINALIZE_CONST;
     }
 
     fn absorb(&mut self, mut data: &[u8]) {
@@ -68,8 +83,7 @@ where
         let mut data_chunk;
 
         loop {
-            let state = &mut self.state()[..{ P::RATE_LANES as usize }];
-            for lane in state.iter_mut() {
+            for lane in self.lanes_iter_mut::<P>() {
                 (data_chunk, data) = data.try_split_array_ref::<LANE_BYTES>();
                 match data_chunk {
                     Some(chunk) => *lane ^= u64::from_le_bytes(*chunk),
@@ -91,43 +105,20 @@ where
     }
 
     fn squeeze(&mut self, out: &mut [u8]) {
-        // let mut out_chunks = out.into_array_chunks_mut::<8>();// slower! :/
-
-        let mut out_chunks = out.chunks_exact_mut(8);
-        loop {
+        for out_blocks in out.chunks_mut(P::RATE_BYTES){
             KeccakOps::<P>::permute(self);
-            let state = self.state();
-            for lane in state[..{ P::RATE_LANES as usize }].iter() {
-                match out_chunks.next() {
-                    Some(chunk) => chunk.copy_from_slice(&lane.to_le_bytes()),
-                    _ => {
-                        let rem = out_chunks.into_remainder();
-                        rem.copy_from_slice(&lane.to_le_bytes()[..rem.len()]);
-                        return;
-                    }
-                };
+            for (lane, out_bytes) in self.lanes_iter::<P>().zip(out_blocks.chunks_mut(8)) {
+                out_bytes.copy_from_slice(&lane.to_le_bytes());
             }
         }
     }
-
-    // not any faster than squeeze() :/
-    // #[inline]
-    // pub(crate) fn squeeze_n<const N: usize>(&mut self, out: &mut [u8; N]) {
-    //     self.permute();
-    //     for (lane, out_block) in self.0[..N / LANE_BYTES]
-    //         .iter()
-    //         .zip(out.chunks_exact_mut(LANE_BYTES))
-    //     {
-    //         out_block.copy_from_slice(&lane.to_le_bytes());
-    //     }
-    // }
 
     /// θ (theta): Compute the parity of each column and xor that into two nearby columns
     /// a[i][j][k] ← a[i][j][k] ⊕ parity(a[0..5][j−1][k]) ⊕ parity(a[0..5][j+1][k−1])
     #[inline(always)]
     fn theta(&mut self) {
-        let state = self.state();
-        let mut parity: [u64; 5] = array_init::array_init(|i| state[i]);
+        let state = self.state_mut();
+        let mut parity: [u64; 5] = array_init(|i| state[i]);
 
         unroll! {
             for j in 0..5{
@@ -158,7 +149,7 @@ where
     #[inline(always)]
     fn rho_pi(&mut self) {
         #![allow(unused_assignments)]
-        let state = self.state();
+        let state = self.state_mut();
         let mut last = state[PI[23] as usize];
         unroll! {
             for i in 0..24 {
@@ -174,7 +165,7 @@ where
     fn chi(&mut self) {
         // for plane in self.0.into_array_chunks_mut::<5>() {
 
-        for plane in self.state().as_mut().chunks_exact_mut(5) {
+        for plane in self.state_mut().as_mut().chunks_exact_mut(5) {
             let mut tmp = [0; 2];
             unroll! {
                 // due to an unroll! bug
@@ -198,6 +189,6 @@ where
     /// ι (iota): the first lane is XORed with the round constant
     #[inline(always)]
     fn iota(&mut self, rc: &u64) {
-        self.state()[0] ^= rc;
+        self.state_mut()[0] ^= rc;
     }
 }

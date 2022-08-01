@@ -1,10 +1,13 @@
 pub mod fips202;
 pub mod keccak_f1600;
 
-use core::ops::{BitXorAssign, Index, IndexMut, Range, RangeTo};
-use zeroize::{Zeroize, ZeroizeOnDrop};
-
+use crate::lib::{
+    ops::{BitXorAssign, Index, IndexMut, Range, RangeTo},
+    slice::{Iter, IterMut},
+};
 use crate::utils::split::Splitter;
+
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 #[derive(Zeroize)]
 pub struct Keccak<T: Default + Copy + Zeroize, const NL: usize>(pub [T; NL], pub bool);
@@ -74,7 +77,7 @@ pub trait KeccakOps<P: KeccakParams>: Zeroize {
     fn iota(&mut self, rc: &u64);
 }
 
-pub trait KeccakState: Zeroize {
+pub trait KeccakState<const NUM_LANES: usize = 25>: Zeroize {
     type Lane: BitXorAssign<Self::Lane> + Copy;
 
     type State: Index<usize, Output = Self::Lane>
@@ -86,9 +89,13 @@ pub trait KeccakState: Zeroize {
         + AsRef<[Self::Lane]>
         + AsMut<[Self::Lane]>;
 
-    const NUM_LANES: usize;
+    const NUM_LANES: usize = NUM_LANES;
 
-    fn state(&mut self) -> &mut [Self::Lane];
+    fn state_mut(&mut self) -> &mut [Self::Lane; NUM_LANES];
+    fn state(&self) -> &[Self::Lane; NUM_LANES];
+
+    fn lanes_iter_mut<P: KeccakParams>(&mut self) -> IterMut<'_, Self::Lane>;
+    fn lanes_iter<P: KeccakParams>(&self) -> Iter<'_, Self::Lane>;
 
     #[inline(always)]
     fn reset(&mut self) {

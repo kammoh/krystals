@@ -6,7 +6,7 @@ use crate::{
     keccak::{fips202::Shake128Params, KeccakParams},
 };
 
-use super::{Poly, Polynomial, PolynomialTrait};
+use super::{Poly, SizedPolynomial, Polynomial};
 
 pub(crate) const DILITHIUM_N: usize = 256;
 
@@ -29,11 +29,11 @@ const ZETAS: [i32; DILITHIUM_N - 1] = {
     zetas
 };
 
-impl PolynomialTrait for DilithiumPoly {
+impl Polynomial for DilithiumPoly {
     type F = DilithiumFq;
 }
 
-impl Polynomial<DILITHIUM_N> for DilithiumPoly {
+impl SizedPolynomial<DILITHIUM_N> for DilithiumPoly {
     const INV_NTT_SCALE: <Self::F as Field>::E = 41_978;
 
     #[inline(always)]
@@ -112,7 +112,7 @@ impl DilithiumPoly {
         poly
     }
 
-    pub fn into_array(&self) -> [<<Self as PolynomialTrait>::F as Field>::E; Self::N] {
+    pub fn into_array(&self) -> [<<Self as Polynomial>::F as Field>::E; Self::N] {
         // array_init::array_init(|i: usize| self[i].0)
         self.0.map(|x| x.0)
     }

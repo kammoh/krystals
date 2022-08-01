@@ -1,5 +1,5 @@
 use crate::{
-    poly::{kyber::KyberPoly, Polynomial},
+    poly::{kyber::KyberPoly, SizedPolynomial},
     polyvec::PolyVec,
 };
 
