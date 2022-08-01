@@ -1,17 +1,12 @@
-use core::ops::{AddAssign, Index, IndexMut};
-
-use rand::{CryptoRng, RngCore};
-
 use crate::{
     keccak::fips202::{CrystalsPrf, CrystalsXof, SpongeOps},
-    poly::{
-        dilithium::DilithiumPoly,
-        kyber::{KyberPoly, Prf, Xof, KYBER_N, NOISE_SEED_BYTES, POLYBYTES, XOF_BLOCK_BYTES},
-        Polynomial, UNIFORM_SEED_BYTES,
-    },
+    kyber::{Prf, Xof, NOISE_SEED_BYTES, XOF_BLOCK_BYTES},
+    lib::ops::{AddAssign, Index, IndexMut},
+    poly::dilithium::DilithiumPoly,
+    poly::kyber::{KyberPoly, KYBER_N, POLYBYTES},
+    poly::{Polynomial, SizedPolynomial, UNIFORM_SEED_BYTES},
 };
-
-use super::poly::SizedPolynomial;
+use rand::{CryptoRng, RngCore};
 
 pub trait PolynomialVector: Default + Sized + Index<usize> + IndexMut<usize> {
     type Poly: Polynomial;

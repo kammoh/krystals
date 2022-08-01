@@ -1,18 +1,15 @@
 use crate::utils::flatten::{FlattenSlice, FlattenSliceMut, FlattenTwice, FlattenTwiceMut};
 use crate::utils::gcd_u8;
 use crate::{
-    poly::{
-        kyber::{
-            compress_d, poly_compressed_bytes, polyvec_compressed_bytes_for_k, KyberPoly, KYBER_N,
-        },
-        Polynomial,
-    },
+    kyber::{poly_compressed_bytes, KYBER_N},
+    poly::kyber::{compress_d, KyberPoly},
+    poly::Polynomial,
     polyvec::{KyberPolyVec, PolynomialVector},
     utils::{flatten::FlattenArray, split::Splitter},
 };
 
 #[cfg(any(feature = "std", feature = "alloc", test))]
-use crate::poly::kyber::poly_compressed_bytes_for_k;
+use crate::kyber::{poly_compressed_bytes_for_k, polyvec_compressed_bytes_for_k};
 
 #[derive(Debug)]
 #[rustfmt::skip] // rustfmt BUG
@@ -57,16 +54,6 @@ pub trait CompressCiphertext {
     fn compress_polyvec(&mut self, b: &Self::PolyVecType);
     fn decompress_polyvec(&self, b: &mut Self::PolyVecType);
 }
-
-const K23_POLY_COMPRESSED_BYTES: usize = poly_compressed_bytes(4);
-const K4_POLY_COMPRESSED_BYTES: usize = poly_compressed_bytes(5);
-const K2_POLYVEC_COMPRESSED_BYTES: usize = polyvec_compressed_bytes_for_k::<2>();
-const K3_POLYVEC_COMPRESSED_BYTES: usize = polyvec_compressed_bytes_for_k::<3>();
-const K4_POLYVEC_COMPRESSED_BYTES: usize = polyvec_compressed_bytes_for_k::<4>();
-
-pub const K2_CT_BYTES: usize = K23_POLY_COMPRESSED_BYTES + K2_POLYVEC_COMPRESSED_BYTES;
-pub const K3_CT_BYTES: usize = K23_POLY_COMPRESSED_BYTES + K3_POLYVEC_COMPRESSED_BYTES;
-pub const K4_CT_BYTES: usize = K4_POLY_COMPRESSED_BYTES + K4_POLYVEC_COMPRESSED_BYTES;
 
 // 4:1 compression
 #[inline]
@@ -412,6 +399,8 @@ mod tests {
     #[test]
     #[cfg(not(miri))] // miri does not support calling foreign functions
     fn test_polycompress_d_vs_ref_pv() {
+        use crate::kyber::polyvec_compressed_bytes_for_k;
+
         for _ in 0..1_000 {
             {
                 const K: usize = 2;

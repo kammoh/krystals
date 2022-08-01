@@ -67,9 +67,8 @@ mod polyvec;
 #[cfg(feature = "pub_internals")]
 pub mod polyvec;
 
-pub mod ciphertext;
+pub mod dilithium;
 pub mod keccak;
-pub mod kem;
-pub mod pke;
+pub mod kyber;
 
-pub use kem::*;
+pub use poly::{Polynomial, SizedPolynomial};

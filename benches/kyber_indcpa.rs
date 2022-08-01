@@ -2,18 +2,12 @@ use criterion::{
     black_box, criterion_group, criterion_main, measurement::Measurement, BenchmarkGroup,
     BenchmarkId, Criterion,
 };
+use krystals::poly::UNIFORM_SEED_BYTES;
 use rand::{Rng, RngCore};
 
-use krystals::{
-    ciphertext::{Ciphertext, CompressedCiphertex},
-    pke::*,
-    poly::{
-        kyber::{kyber_ciphertext_bytes, MSG_BYTES, NOISE_SEED_BYTES, POLYBYTES},
-        UNIFORM_SEED_BYTES,
-    },
-    CPASecretKey, PublicKey,
-};
 use crystals_cref::{kyber as cref, randombytes::randombytes_push_bytes};
+use krystals::kyber::*;
+use krystals::poly::kyber::POLYBYTES;
 
 fn bench_kyber_keygen<M: Measurement, const K: usize>(group: &mut BenchmarkGroup<M>) {
     let mut rng = rand::thread_rng();
@@ -99,7 +93,6 @@ fn bench_kyber_encrypt<M: Measurement, const K: usize>(group: &mut BenchmarkGrou
 
     #[cfg(any(feature = "std", feature = "alloc"))]
     {
-        use krystals::ciphertext::VecCipherText;
         let mut ct = VecCipherText::<K>::default();
         group.bench_function(BenchmarkId::new("Rust/VecCipherText", K), |b| {
             b.iter(|| {
@@ -170,7 +163,6 @@ fn bench_kyber_decrypt<M: Measurement, const K: usize>(group: &mut BenchmarkGrou
     }
     #[cfg(any(feature = "std", feature = "alloc"))]
     {
-        use krystals::ciphertext::VecCipherText;
         let mut ct = VecCipherText::<K>::default();
         rng.fill(ct.poly_bytes_mut());
         rng.fill(ct.polyvec_bytes_mut());

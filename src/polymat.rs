@@ -1,7 +1,7 @@
-use core::ops::{Index, IndexMut};
-
+use crate::lib::ops::{Index, IndexMut};
 use crate::{
-    poly::{kyber::KyberPoly, SizedPolynomial, UNIFORM_SEED_BYTES},
+    poly::kyber::KyberPoly,
+    poly::{SizedPolynomial, UNIFORM_SEED_BYTES},
     polyvec::*,
 };
 

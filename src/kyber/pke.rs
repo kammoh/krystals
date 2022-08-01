@@ -1,15 +1,48 @@
-use crate::ciphertext::{Ciphertext, CompressCiphertext};
+use super::ciphertext::{Ciphertext, CompressCiphertext};
 use crate::keccak::fips202::{Digest, Sha3_512};
-use crate::poly::kyber::{KyberPoly, Prf, MSG_BYTES, NOISE_SEED_BYTES};
+use crate::kyber::{Prf, MSG_BYTES, NOISE_SEED_BYTES};
+use crate::poly::kyber::{KyberPoly, POLYBYTES};
 use crate::poly::{Polynomial, SizedPolynomial, UNIFORM_SEED_BYTES};
 use crate::polyvec::*;
 use crate::utils::split::ArraySplitter;
-use crate::CPASecretKey;
-use crate::PublicKey;
 
 // API?
 pub const KYBER_SSBYTES: usize = MSG_BYTES;
 pub const KYBER_SYMBYTES: usize = 32;
+
+pub struct PublicKey<const K: usize> {
+    pub bytes: [[u8; POLYBYTES]; K],
+    pub seed: [u8; UNIFORM_SEED_BYTES],
+}
+
+impl<const K: usize> Default for PublicKey<K> {
+    fn default() -> Self {
+        Self {
+            bytes: [[0; POLYBYTES]; K],
+            seed: [0; UNIFORM_SEED_BYTES],
+        }
+    }
+}
+
+pub struct CPASecretKey<const K: usize>([[u8; POLYBYTES]; K]);
+
+impl<const K: usize> CPASecretKey<K> {
+    #[inline(always)]
+    pub fn bytes(&self) -> &[[u8; POLYBYTES]; K] {
+        &self.0
+    }
+
+    #[inline(always)]
+    pub fn bytes_mut(&mut self) -> &mut [[u8; POLYBYTES]; K] {
+        &mut self.0
+    }
+}
+
+impl<const K: usize> Default for CPASecretKey<K> {
+    fn default() -> Self {
+        Self([[0; POLYBYTES]; K])
+    }
+}
 
 pub trait PublicKeyScheme {
     type PublicKey;
@@ -202,10 +235,7 @@ mod tests {
     use rand::Rng;
     use rand::RngCore;
 
-    use crate::ciphertext::*;
-    use crate::poly::kyber::kyber_ciphertext_bytes;
-    use crate::poly::kyber::polyvec_compressed_bytes_for_k;
-    use crate::poly::kyber::POLYBYTES;
+    use crate::kyber::{ciphertext::*, kyber_ciphertext_bytes, polyvec_compressed_bytes_for_k};
     use crate::utils::flatten::FlattenSlice;
 
     use super::*;

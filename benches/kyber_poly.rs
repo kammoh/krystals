@@ -1,7 +1,7 @@
 use core::time::Duration;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use krystals::poly::{kyber::KyberPoly, SizedPolynomial};
 use crystals_cref::kyber as cref;
+use krystals::poly::{kyber::KyberPoly, SizedPolynomial};
 use rand::thread_rng;
 
 fn kyber_ntt_bench(c: &mut Criterion) {

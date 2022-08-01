@@ -1,12 +1,11 @@
 use crate::field::kyber::{caddq, fqmul, KyberFq, KYBER_Q, MONT};
 use crate::field::Field;
-use crate::keccak::fips202::{CrystalsPrf, HasParams, Shake128, Shake256, SpongeOps};
-use crate::keccak::KeccakParams;
+use crate::keccak::fips202::{CrystalsPrf, SpongeOps};
+use crate::kyber::{poly_compressed_bytes, Prf, NOISE_SEED_BYTES, XOF_BLOCK_BYTES};
 use crate::lib::mem::{size_of, transmute};
+use crate::poly::{Poly, Polynomial, SizedPolynomial};
 use crate::utils::flatten::FlattenArray;
 use crate::utils::split::*;
-
-use super::{Poly, Polynomial, SizedPolynomial};
 
 pub const KYBER_N: usize = 256;
 
@@ -15,40 +14,6 @@ const ROOT_OF_UNITY: i16 = 17; // 2Nth (256-th) root of 1 mod Q
 pub type KyberPoly = Poly<KyberFq, { KYBER_N / 2 }>;
 
 pub const POLYBYTES: usize = { KyberPoly::N } * 3;
-
-pub const MSG_BYTES: usize = 32;
-
-pub const NOISE_SEED_BYTES: usize = 32;
-
-pub type Xof = Shake128;
-pub const XOF_BLOCK_BYTES: usize = <Xof as HasParams<_>>::Params::RATE_BYTES;
-
-pub type Prf = Shake256;
-pub const PRF_BLOCK_BYTES: usize = <Prf as HasParams<_>>::Params::RATE_BYTES;
-
-pub(crate) const fn poly_compressed_bytes(d: u8) -> usize {
-    KYBER_N * d as usize / 8 // == 32 * d
-}
-
-pub(crate) const fn poly_compressed_bytes_for_k<const K: usize>() -> usize {
-    match K {
-        2 | 3 => poly_compressed_bytes(4),
-        4 => poly_compressed_bytes(5),
-        _ => unreachable!(),
-    }
-}
-
-pub(crate) const fn polyvec_compressed_bytes_for_k<const K: usize>() -> usize {
-    (match K {
-        2 | 3 => poly_compressed_bytes(10),
-        4 => poly_compressed_bytes(11),
-        _ => unreachable!(),
-    }) * K
-}
-
-pub const fn kyber_ciphertext_bytes<const K: usize>() -> usize {
-    polyvec_compressed_bytes_for_k::<K>() + poly_compressed_bytes_for_k::<K>()
-}
 
 #[inline(always)]
 pub(crate) fn compress_d<const D: usize>(u: i16) -> u16 {

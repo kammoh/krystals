@@ -5,8 +5,8 @@ use criterion::{
 };
 use rand::Rng;
 
-use krystals::{poly::kyber::KYBER_N, polymat::KyberMatrix};
 use crystals_cref::kyber as cref;
+use krystals::{poly::kyber::KYBER_N, polymat::KyberMatrix};
 
 fn kyber_gen_matrix_bench_gen<M: Measurement, const K: usize, const TRANSPOSED: bool>(
     group: &mut BenchmarkGroup<M>,

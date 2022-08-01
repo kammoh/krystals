@@ -1,3 +1,6 @@
+pub mod dilithium;
+pub mod kyber;
+
 use crate::field::Field;
 use crate::keccak::fips202::{CrystalsXof, Shake128, Shake128Params, SpongeOps};
 use crate::keccak::KeccakParams;
@@ -5,9 +8,6 @@ use crate::lib::fmt::Debug;
 use crate::lib::ops::{AddAssign, Index, IndexMut, SubAssign};
 use crate::lib::slice::{Iter, IterMut};
 use crate::polyvec::PolyVec;
-
-pub mod dilithium;
-pub mod kyber;
 
 // TODO use Parameters
 pub const UNIFORM_SEED_BYTES: usize = 32;
@@ -203,29 +203,6 @@ impl<T: Field, const N: usize> Default for Poly<T, N> {
     }
 }
 
-// impl<T: Field, const N: usize> AsRef<[T]> for Poly<T, N> {
-//     #[inline(always)]
-//     fn as_ref(&self) -> &[T] {
-//         &self.0
-//     }
-// }
-// impl<T: Field, const N: usize> AsMut<[T]> for Poly<T, N> {
-//     #[inline(always)]
-//     fn as_mut(&mut self) -> &mut [T] {
-//         &mut self.0
-//     }
-// }
-
-// impl<F: Field, const N: usize> IntoIterator for Poly<F, N> {
-//     type Item = F;
-//     type IntoIter = core::array::IntoIter<F, N>;
-
-//     #[inline(always)]
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.0.into_iter()
-//     }
-// }
-
 impl<'a, F: Field, const N: usize> IntoIterator for &'a Poly<F, N> {
     type Item = &'a F;
     type IntoIter = Iter<'a, F>;
@@ -264,8 +241,8 @@ impl<T: Field, const N: usize> AddAssign<&Self> for Poly<T, N> {
 impl<T: Field, const N: usize> SubAssign<&Self> for Poly<T, N> {
     #[inline(always)]
     fn sub_assign(&mut self, rhs: &Self) {
-        for i in 0..self.0.len() {
-            self[i] -= rhs[i];
+        for (left, right) in self.as_mut().iter_mut().zip(rhs) {
+            *left -= *right;
         }
     }
 }

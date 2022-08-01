@@ -1,5 +1,5 @@
 use super::{keccak_f1600::Keccak1600, *};
-use crate::poly::{kyber::NOISE_SEED_BYTES, UNIFORM_SEED_BYTES};
+use crate::{kyber::NOISE_SEED_BYTES, poly::UNIFORM_SEED_BYTES};
 
 #[derive(Default, Zeroize, ZeroizeOnDrop)]
 pub struct Sha3_256(Keccak1600);
