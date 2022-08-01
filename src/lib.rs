@@ -13,7 +13,7 @@ extern crate static_assertions;
 
 /// A workaround for all the types we need from the `std`, `core`, and `alloc`
 /// crates, avoiding elaborate import wrangling having to happen in every module.
-/// Based on https://github.com/serde-rs/serde
+/// Based on <https://github.com/serde-rs/serde>
 mod lib {
     mod core {
         #[cfg(not(feature = "std"))]
