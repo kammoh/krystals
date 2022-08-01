@@ -47,10 +47,6 @@ alloc = ["zeroize/alloc", "secrecy/alloc"]
 pub_internals = []                          # some internal modules are made public
 unstable = []
 
-# [[bench]]
-# name = "kem_keypair_bench"
-# harness = false
-
 [[bench]]
 name = "keccak"
 harness = false
