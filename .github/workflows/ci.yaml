@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: true
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo test
       - run: cargo test --no-default-features
@@ -21,6 +23,8 @@ jobs:
   #   runs-on: windows-latest
   #   steps:
   #     - uses: actions/checkout@v3
+  #       with:
+  #         submodules: true
   #     - uses: dtolnay/rust-toolchain@nightly
   #     - run: cargo test --features std -- --skip ui --exact
 
@@ -33,6 +37,8 @@ jobs:
         rust: [stable, beta]
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: true
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{matrix.rust}}
@@ -47,24 +53,30 @@ jobs:
   #   # if: github.event_name != 'pull_request'
   #   steps:
   #     - uses: actions/checkout@v3
+  #       with:
+  #         submodules: true
   #     - uses: dtolnay/rust-toolchain@clippy
   #     - run: cargo clippy -- -Dclippy::all
   #     # - run: cargo clippy --features std -- -Dclippy::all
   #     # - run: cargo clippy --no-default-features -- -Dclippy::all -Dclippy::pedantic
 
-  # fmt:
-  #   name: Rust-Format
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - uses: dtolnay/rust-toolchain@clippy
-  #     - run: cargo fmt --all -- --check
+  fmt:
+    name: Rust-Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@clippy
+      - run: cargo fmt --all -- --check
 
   # miri:
   #   name: Miri
   #   runs-on: ubuntu-latest
   #   steps:
   #     - uses: actions/checkout@v3
+  #       with:
+  #         submodules: true
   #     - uses: dtolnay/rust-toolchain@miri
   #     # - run: cargo miri test
   #     # - run: cargo miri test --no-default-features

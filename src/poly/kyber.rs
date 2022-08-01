@@ -424,7 +424,7 @@ impl KyberPoly {
             // }
             let mut shl: i8 = 0;
             let mut idx = 0;
-            
+
             for b in bytes {
                 debug_assert!(shl < 8);
 

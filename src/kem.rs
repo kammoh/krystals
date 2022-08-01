@@ -86,10 +86,7 @@ pub struct SecretKey<const K: usize> {
 
 pub type CipherText<const KYBER_CIPHERTEXTBYTES: usize> = [u8; KYBER_CIPHERTEXTBYTES]; // FIXME
 
-
-trait Kem {
-
-}
+trait Kem {}
 
 // pub fn encapsulate<R: RngCore, const K: usize, const KYBER_CIPHERTEXTBYTES: usize>(
 //     pk: &PublicKey<K>,

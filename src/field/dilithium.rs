@@ -136,7 +136,6 @@ mod tests {
     const MONT_SQUARED: i32 = ((MONT as i64).pow(2) % DILITHIUM_Q as i64) as i32; // MONT^2
     const NUM_TESTS: usize = if cfg!(miri) { 100 } else { 1_000_000 };
 
-
     #[test]
     fn test_reduce() {
         let mut rng = rand::thread_rng();

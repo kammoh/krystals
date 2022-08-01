@@ -105,7 +105,7 @@ where
     }
 
     fn squeeze(&mut self, out: &mut [u8]) {
-        for out_blocks in out.chunks_mut(P::RATE_BYTES){
+        for out_blocks in out.chunks_mut(P::RATE_BYTES) {
             KeccakOps::<P>::permute(self);
             for (lane, out_bytes) in self.lanes_iter::<P>().zip(out_blocks.chunks_mut(8)) {
                 out_bytes.copy_from_slice(&lane.to_le_bytes());

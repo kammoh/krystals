@@ -6,7 +6,7 @@ use crate::{
     keccak::{fips202::Shake128Params, KeccakParams},
 };
 
-use super::{Poly, SizedPolynomial, Polynomial};
+use super::{Poly, Polynomial, SizedPolynomial};
 
 pub(crate) const DILITHIUM_N: usize = 256;
 

@@ -12,7 +12,7 @@ pub mod kyber;
 // TODO use Parameters
 pub const UNIFORM_SEED_BYTES: usize = 32;
 
-pub trait Polynomial: 
+pub trait Polynomial:
     Index<usize, Output = Self::F>
     + IndexMut<usize, Output = Self::F>
     // + IntoIterator
@@ -27,11 +27,8 @@ pub trait Polynomial:
 }
 
 pub trait SizedPolynomial<const N: usize>:
-    Polynomial
-    + AsRef<[Self::F; N]>
-    + AsMut<[Self::F; N]>
+    Polynomial + AsRef<[Self::F; N]> + AsMut<[Self::F; N]>
 {
-
     const N: usize = N;
 
     const INV_NTT_SCALE: <Self::F as Field>::E;
@@ -166,8 +163,11 @@ pub trait SizedPolynomial<const N: usize>:
 
     fn pointwise_acc(&self, other: &Self, result: &mut Self);
 
-    fn vector_mul_acc<const K: usize>(&mut self, lhs: &PolyVec<Self, N, K>, rhs: &PolyVec<Self, N, K>)
-    {
+    fn vector_mul_acc<const K: usize>(
+        &mut self,
+        lhs: &PolyVec<Self, N, K>,
+        rhs: &PolyVec<Self, N, K>,
+    ) {
         let mut t = Self::default();
 
         for (l, r) in lhs.as_ref().iter().zip(rhs.as_ref().iter()) {
@@ -183,7 +183,7 @@ pub trait SizedPolynomial<const N: usize>:
         let mut shake128 = Shake128::default();
         shake128.absorb_xof_with_nonces(seed, i, j);
         let mut xof_out = [0u8; Shake128Params::RATE_BYTES];
-        
+
         let mut ctr = 0;
         while ctr < Self::NUM_SCALARS {
             shake128.squeeze(&mut xof_out);
@@ -192,7 +192,6 @@ pub trait SizedPolynomial<const N: usize>:
         debug_assert_eq!(ctr, Self::NUM_SCALARS);
     }
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Poly<T: Field, const N: usize>([T; N]);
@@ -259,7 +258,6 @@ impl<T: Field, const N: usize> AddAssign<&Self> for Poly<T, N> {
     }
 }
 
-
 /// Subtracts `rhs` polynomial from self, i.e. `self` <- `self` - `rhs` ; no modular reduction is performed.
 /// # Arguments
 /// * `rhs` - Righthand-side input polynomial
@@ -300,7 +298,6 @@ impl<F: Field, const N: usize> AsMut<[F; N]> for Poly<F, N> {
         &mut self.0
     }
 }
-
 
 #[cfg(test)]
 mod tests {}

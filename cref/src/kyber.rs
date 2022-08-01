@@ -412,7 +412,6 @@ pub fn indcpa_enc<const K: usize>(ct: &mut [u8], m: &[u8; 32], pk: &[u8], coins:
     }
 }
 
-
 pub fn indcpa_dec<const K: usize>(m: &mut [u8; 32], ct: &[u8], sk: &[[u8; KYBER_POLYBYTES]; K]) {
     // assert_eq!(sk.len(), KYBER_POLYBYTES * K);
     match K {

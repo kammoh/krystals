@@ -178,8 +178,8 @@ fn polycompress_d11(ct: &mut [u8; poly_compressed_bytes(11)], poly: &KyberPoly) 
     }
 }
 
-impl<const D_POLY: usize, const D_PV: usize, const M: usize, const K: usize>
-    CompressedCiphertex for Ciphertext<D_POLY, D_PV, K, M>
+impl<const D_POLY: usize, const D_PV: usize, const M: usize, const K: usize> CompressedCiphertex
+    for Ciphertext<D_POLY, D_PV, K, M>
 {
     const M: usize = M;
 
@@ -422,10 +422,7 @@ mod tests {
                 let mut ct_ref = [0u8; poly_compressed_bytes(D) * K];
 
                 pv.compress::<{ D as usize }>(&mut ct);
-                cref::polyvec_compress::<K>(
-                    &mut ct_ref,
-                    &pv.as_ref().map(|p| p.into_array()),
-                );
+                cref::polyvec_compress::<K>(&mut ct_ref, &pv.as_ref().map(|p| p.into_array()));
                 assert_eq!(
                     FlattenArray::<_, { D as usize }, {M  * K}, { M  * K* D as usize }>::flatten_array(
                         ct.flatten_array()
@@ -443,10 +440,7 @@ mod tests {
                 let mut ct_ref = [0u8; polyvec_compressed_bytes_for_k::<K>()];
 
                 pv.compress::<{ D as usize }>(&mut ct);
-                cref::polyvec_compress::<K>(
-                    &mut ct_ref,
-                    &pv.as_ref().map(|p| p.into_array()),
-                );
+                cref::polyvec_compress::<K>(&mut ct_ref, &pv.as_ref().map(|p| p.into_array()));
                 let t: &[[_; D as usize]; K * M] = ct.flatten_array();
                 assert_eq!(t.flatten_array(), &ct_ref, "\nct_ref: {:?}\n", ct_ref,);
             }
@@ -459,10 +453,7 @@ mod tests {
                 let mut ct_ref = [0u8; polyvec_compressed_bytes_for_k::<K>()];
 
                 pv.compress::<{ D as usize }>(&mut ct);
-                cref::polyvec_compress::<K>(
-                    &mut ct_ref,
-                    &pv.as_ref().map(|p| p.into_array()),
-                );
+                cref::polyvec_compress::<K>(&mut ct_ref, &pv.as_ref().map(|p| p.into_array()));
                 let t: &[[_; D as usize]; K * M] = ct.flatten_array();
                 assert_eq!(t.flatten_array(), &ct_ref, "\nct_ref: {:?}\n", ct_ref,);
             }
