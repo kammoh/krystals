@@ -1,12 +1,16 @@
 [package]
-name = "crystals"
-version = "0.1.0"
+name = "krystals"
+version = "0.0.1"
 authors = ["Kamyar Mohajerani <kammoh@gmail.com>"]
-edition = "2021"
 license = "Apache-2.0"
 readme = "README.md"
+description = "Rust implementation of CRYSTALS-Kyber and CRYSTALS-Dilithium"
+homepage = "https://github.com/kammoh/crystals-rs"
+repository = "https://github.com/kammoh/crystals-rs.git"
 categories = ["cryptography", "no-std"]
-rust-version = "1.62"
+# documentation = "https://docs.rs/krystals"
+rust-version = "1.59.0"
+edition = "2021"
 autobenches = true
 
 [lib]

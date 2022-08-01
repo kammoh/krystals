@@ -46,31 +46,23 @@ jobs:
       - run: cargo build --no-default-features
       - run: cargo build --features std
       - run: cargo test
+      - run: cargo bench --no-run
 
-  # clippy:
-  #   name: Clippy
-  #   runs-on: ubuntu-latest
-  #   # if: github.event_name != 'pull_request'
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         submodules: true
-  #     - uses: dtolnay/rust-toolchain@clippy
-  #     - run: cargo clippy -- -Dclippy::all
-  #     # - run: cargo clippy --features std -- -Dclippy::all
-  #     # - run: cargo clippy --no-default-features -- -Dclippy::all -Dclippy::pedantic
-
-  fmt:
-    name: Rust-Format
+  format_clippy:
+    name: Format-and-Clippy
     runs-on: ubuntu-latest
+    # if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: true
+          submodules: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt,clippy
       - run: cargo fmt --all -- --check
+      - run: cargo clippy -- -Dclippy::all
+      - run: cargo clippy --features std -- -Dclippy::all
+      - run: cargo clippy --no-default-features -- -Dclippy::all # -Dclippy::pedantic
 
   # miri:
   #   name: Miri
